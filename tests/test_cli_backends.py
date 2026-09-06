@@ -111,7 +111,8 @@ def test_codex_edit_in_place_full_auto_in_workspace(tmp_path):
     rec = Recorder(on_call=_codex_writer("edited"))
     res = CodexCliProvider(executable="x", runner=rec).edit_in_place("codex:gpt-5", tmp_path, "PROMPT")
     args, call = rec.calls[0]["args"], rec.calls[0]
-    assert "--full-auto" in args and args[args.index("-C") + 1] == str(tmp_path)
+    assert args[args.index("--sandbox") + 1] == "workspace-write" and "--full-auto" not in args
+    assert args[args.index("-C") + 1] == str(tmp_path)
     assert call["cwd"] == str(tmp_path) and call["input"] == "PROMPT"
     assert res.summary == "edited"
 

@@ -17,7 +17,7 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22d3ee?style=flat-square&logo=python&logoColor=white">
   <img alt="Works with Claude Code" src="https://img.shields.io/badge/works%20with-Claude%20Code-f472b6?style=flat-square">
   <img alt="Works with Codex CLI" src="https://img.shields.io/badge/works%20with-Codex%20CLI-34d399?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-60%20passing%20offline-34d399?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-61%20passing%20offline-34d399?style=flat-square">
   <a href="https://github.com/Devilz06/Bicameral/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Devilz06/Bicameral?style=flat-square&color=fbbf24"></a>
 </p>
 
@@ -56,7 +56,7 @@ Three steps, about two minutes. Works on Windows, macOS and Linux.
 |---|---|---|
 | **Python 3.11 or newer** | Bicameral is a Python program | [python.org/downloads](https://www.python.org/downloads/) (on Windows tick **"Add python.exe to PATH"** in the installer) |
 | **Claude Code**, signed in | It is the planner and the reviewer | [claude.com/claude-code](https://claude.com/claude-code), then run `claude` once and sign in |
-| **Node.js** *(optional)* | Only needed for the ChatGPT / Codex coder | [nodejs.org](https://nodejs.org). Skip it and Claude does both jobs |
+| **Node.js** *(optional)* | Only to install the Codex CLI for the ChatGPT coder. Not needed if you already have the Codex desktop app: Bicameral finds the CLI inside it | [nodejs.org](https://nodejs.org). Skip it and Claude does both jobs |
 
 ### Step 1: install Bicameral
 
@@ -195,7 +195,7 @@ There is also a terminal dashboard (`bicameral tui`) with the same information, 
 | The skill says "bicameral_* tools are not available" | Same as above: `bicameral install`, then restart Claude Code. |
 | "Not signed in", or `claude` says "OAuth session expired" | Run `claude auth login` in a terminal, or click **Sign in to Claude** on the Setup tab. |
 | Claude says there is no usable Editor model | You have not signed in to a coder yet. Click **Install Codex** then **Sign in to ChatGPT**, or answer "Do it all myself" and Claude does every step. |
-| "`codex` is not installed" | Install Node.js, then `npm i -g @openai/codex`, then `codex login`. The Setup tab does both with one button each. |
+| "`codex` is not installed" | Install Node.js, then `npm i -g @openai/codex`, then `codex login`. The Setup tab does both with one button each. If you have the Codex desktop app, Bicameral uses the CLI bundled inside it; restart `bicameral` after installing the app. |
 | A task "failed" but your files look untouched | That is the rollback working. Open the task in **History** to see which step was rejected and why. |
 | The page says it lost the connection | The terminal that ran `bicameral` was closed. Run `bicameral` again. |
 
@@ -308,7 +308,7 @@ src/bicameral/
   tui/              the Textual terminal dashboard
   evals/            harness and bundled fixture tasks
   __main__.py       `python -m bicameral` == `bicameral`
-tests/              60 offline tests with scripted fake backends
+tests/              61 offline tests with scripted fake backends
 ```
 
 ## ❓ FAQ

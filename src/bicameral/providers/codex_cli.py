@@ -20,7 +20,16 @@ from .base import AgentEditResult, Completion, ProviderError
 
 
 def find_executable() -> str | None:
-    return shutil.which("codex")
+    """`codex` on PATH, else the copy the Codex desktop app bundles (it is not on PATH)."""
+    exe = shutil.which("codex")
+    if exe:
+        return exe
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        hits = sorted((Path(local) / "OpenAI" / "Codex" / "bin").glob("*/codex.exe"), key=lambda p: p.stat().st_mtime)
+        if hits:
+            return str(hits[-1])
+    return None
 
 
 def codex_home() -> Path:
@@ -136,7 +145,10 @@ class CodexCliProvider:
     def edit_in_place(self, model: str, root: Path, prompt: str, effort: str | None = None) -> AgentEditResult:
         with tempfile.TemporaryDirectory(prefix="bicameral-codex-") as tmp:
             out = Path(tmp) / "last-message.txt"
-            args = ["exec", "--skip-git-repo-check", "-C", str(root), "--full-auto", "-m", bare_model(model), "-o", str(out)]
+            # `exec` never prompts; workspace-write lets it edit and run tests inside the repo only.
+            # (`--full-auto` was removed from `codex exec` in 2026 releases; `--sandbox` works on old and new.)
+            args = ["exec", "--skip-git-repo-check", "-C", str(root), "--sandbox", "workspace-write",
+                    "-m", bare_model(model), "-o", str(out)]
             if effort:
                 args += ["-c", f'model_reasoning_effort="{effort}"']
             text, latency = self._invoke(args, prompt, root, out, timeout=3600)

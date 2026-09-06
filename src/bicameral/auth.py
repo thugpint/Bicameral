@@ -59,7 +59,7 @@ def status_codex_cli() -> Backend:
     if not s.get("installed"):
         detail = "`codex` is not installed" + (" (a ChatGPT sign-in exists in ~/.codex)" if s.get("loggedIn") else "")
         return Backend("codex-cli", "Codex CLI (your ChatGPT account)", "account", False, detail,
-                       "Install: npm i -g @openai/codex, then run: codex login", installed=False)
+                       "Install the Codex desktop app or run: npm i -g @openai/codex, then: codex login", installed=False)
     if s.get("loggedIn"):
         return Backend("codex-cli", "Codex CLI (your ChatGPT account)", "account", True,
                        f"signed in via {s.get('authMethod')}", "")

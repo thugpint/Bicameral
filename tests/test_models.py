@@ -63,6 +63,22 @@ def test_api_models_follow_the_key(monkeypatch):
         raise AssertionError("refresh should surface the provider error")
 
 
+def test_codex_desktop_app_bundle_is_found_without_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(codex_cli.shutil, "which", lambda name: None)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert codex_cli.find_executable() is None
+    old = tmp_path / "OpenAI" / "Codex" / "bin" / "aaaa"
+    new = tmp_path / "OpenAI" / "Codex" / "bin" / "bbbb"
+    for d in (old, new):
+        d.mkdir(parents=True)
+        (d / "codex.exe").write_bytes(b"")
+    import os
+    os.utime(old / "codex.exe", (1, 1))
+    assert codex_cli.find_executable() == str(new / "codex.exe")
+    monkeypatch.setattr(codex_cli.shutil, "which", lambda name: "/usr/bin/codex")
+    assert codex_cli.find_executable() == "/usr/bin/codex"
+
+
 def test_codex_auth_status_prefers_the_chatgpt_session(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEX_HOME", str(tmp_path))
     (tmp_path / "auth.json").write_text(json.dumps({"auth_mode": "chatgpt", "OPENAI_API_KEY": None, "tokens": {"access_token": "t"}}), "utf-8")

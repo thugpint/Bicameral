@@ -18,6 +18,9 @@ def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("BICAMERAL_HOME", str(home))
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    # Keep the developer's real Codex sign-in, model cache and desktop app out of the tests.
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
     return home
 
 
