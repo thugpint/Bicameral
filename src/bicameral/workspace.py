@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -20,6 +21,16 @@ PYTHON = f'"{sys.executable}"'
 class CommandResult:
     ok: bool
     code: int
+    output: str
+
+
+@dataclass
+class GateResult:
+    """A deterministic check (lint, typecheck, build) run before any model judges a diff."""
+
+    command: str
+    ran: bool  # False when the executable could not be started: a configuration error, never a pass
+    ok: bool
     output: str
 
 
@@ -141,6 +152,26 @@ class Workspace:
         if len(output) > tail_chars:
             output = "...\n" + output[-tail_chars:]
         return CommandResult(proc.returncode == 0, proc.returncode, output.strip())
+
+    def run_gate(self, command: str, timeout: int = 600, tail_chars: int = 3000) -> GateResult:
+        """Run a gate with explicit argv (no shell), so a missing executable is reported as such."""
+        tokens = shlex.split(command, posix=os.name != "nt")
+        argv = [sys.executable if t == "{python}" else t.strip('"') for t in tokens]
+        if not argv:
+            return GateResult(command, False, False, "empty command")
+        try:
+            proc = subprocess.run(
+                argv, cwd=self.root, capture_output=True, text=True, timeout=timeout,
+                encoding="utf-8", errors="replace",
+            )
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            return GateResult(command, False, False, f"could not start {argv[0]!r}: {e}")
+        except subprocess.TimeoutExpired:
+            return GateResult(command, True, False, f"timed out after {timeout}s")
+        output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+        if len(output) > tail_chars:
+            output = "...\n" + output[-tail_chars:]
+        return GateResult(command, True, proc.returncode == 0, output.strip())
 
     def detect_test_command(self) -> str | None:
         has_py_tests = (self.root / "tests").is_dir() or any(self.root.glob("test_*.py")) or (

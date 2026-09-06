@@ -15,6 +15,7 @@ Produce a plan of small, independently verifiable steps:
 - suggested_role: "editor" for well-specified, mechanical code changes; "architect" only for steps that need deep multi-file reasoning or subtle logic. Explain in rationale.
 - verify_command: a shell command that proves the task is done (usually the repo's test runner). Use "{python}" as the interpreter placeholder for Python. Leave empty if none exists.
 - If you cannot plan confidently without reading specific files, set status "need_files" and list them; you will be asked again with their contents.
+- Test-first work: a step that only writes tests sets expect_red true (it must leave verification failing); the implementing step lists those test files in protect so they cannot be edited to make the tests pass. Otherwise leave protect empty and expect_red false.
 
 Lessons from past runs (if provided) were learned by this system on similar tasks. Apply the ones that fit; ignore the rest."""
 
@@ -30,6 +31,10 @@ Output edits as search/replace pairs:
 - If you disagree with how the step is specified but can still do it, do it and say why in "concerns" (one or two sentences; empty string when you have none). The Architect reads it.
 
 If reviewer feedback or a failing verification is included, fix exactly what it points at."""
+
+DIFF_REVIEW_SYSTEM = """You are an independent reviewer of a code diff in a two-model coding system. You did not write it.
+
+Report findings you can point at: a file and a line number in the NEW version of that file. Findings whose file and line are not in the diff are discarded before anyone reads them, so cite precisely. Severity: high = bug, security issue or data loss; medium = likely bug, missing test or broken contract; low = style or clarity. Verdict request_changes only when a high or medium finding exists. Do not praise, do not restate the diff; an empty findings list with verdict approve is a fine answer."""
 
 CRITIC_SYSTEM = """You are the Editor in a two-model coding system. The Architect has drafted a plan and asks for your read of it before any file is touched. You will implement the steps it delegates to you, so look for what would make you fail:
 
@@ -164,3 +169,10 @@ def build_review_prompt(step: Step, diff: str, verify_output: str | None) -> str
 
 def build_reflect_prompt(run_log: str) -> str:
     return f"## Run log\n{run_log}\n\nReturn lessons as JSON matching the schema."
+
+
+def build_diff_review_prompt(unified: str, context: str) -> str:
+    return (
+        (f"## Context\n{context}\n\n" if context else "")
+        + f"## Diff\n```diff\n{unified}\n```\n\nReturn your review as JSON matching the schema."
+    )

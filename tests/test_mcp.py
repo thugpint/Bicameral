@@ -203,7 +203,8 @@ def test_self_authored_step_gets_editor_second_opinion(median_repo):
     assert f"Second opinion from {EDITOR}: REJECT: even-length branch still wrong" in out
     assert "final call" in out
     assert fp.calls_for("review")[0][1] == EDITOR and "+    mid = len(s) // 2" in fp.calls_for("review")[0][2]
-    assert "accepted (verified)" in app.review(run_id, 1, "accept")  # the architect still decides
+    assert app.review(run_id, 1, "accept").startswith("refused")  # overruling the other mind needs a stated reason
+    assert "accepted (verified)" in app.review(run_id, 1, "accept", "tests pass; the reviewer misread the branch")
 
 
 def test_delegated_step_shows_editor_concerns(median_repo):

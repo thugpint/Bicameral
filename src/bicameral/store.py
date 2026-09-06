@@ -71,6 +71,27 @@ CREATE TABLE IF NOT EXISTS examples (
     model TEXT,
     run_id INTEGER
 );
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id INTEGER PRIMARY KEY,
+    run_id INTEGER NOT NULL,
+    step_id INTEGER NOT NULL,
+    attempt INTEGER NOT NULL,
+    ref TEXT NOT NULL,
+    sha TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS disputes (
+    id INTEGER PRIMARY KEY,
+    run_id INTEGER NOT NULL,
+    step_id INTEGER NOT NULL,
+    author TEXT NOT NULL,
+    objector TEXT NOT NULL,
+    objection TEXT NOT NULL,
+    resolution TEXT NOT NULL,
+    resolver TEXT NOT NULL,
+    verified INTEGER,
+    created_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS eval_runs (
     id INTEGER PRIMARY KEY,
     created_at REAL NOT NULL,
@@ -86,12 +107,25 @@ CREATE TABLE IF NOT EXISTS eval_runs (
 """
 
 
+# Columns added after the first release; applied to databases created before them.
+MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("steps", "commit_sha", "TEXT"),
+    ("steps", "touched", "TEXT"),
+    ("steps", "gates", "TEXT"),
+)
+
+
 class Store:
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        for table, column, ctype in MIGRATIONS:
+            have = {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+            if column not in have:
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ctype}")
+        self.conn.commit()
 
     def close(self) -> None:
         self.conn.close()
@@ -134,6 +168,34 @@ class Store:
     def steps_for(self, run_id: int) -> list[sqlite3.Row]:
         return list(self.conn.execute("SELECT * FROM steps WHERE run_id = ? ORDER BY step_idx", (run_id,)))
 
+    def run(self, run_id: int) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+
+    # -- checkpoints and disputes -------------------------------------------
+
+    def add_checkpoint(self, run_id: int, step_id: int, attempt: int, ref: str, sha: str) -> None:
+        self.conn.execute(
+            "INSERT INTO checkpoints (run_id, step_id, attempt, ref, sha, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (run_id, step_id, attempt, ref, sha, time.time()),
+        )
+        self.conn.commit()
+
+    def checkpoints_for(self, run_id: int) -> list[sqlite3.Row]:
+        return list(self.conn.execute("SELECT * FROM checkpoints WHERE run_id = ? ORDER BY id", (run_id,)))
+
+    def add_dispute(self, run_id: int, step_id: int, author: str, objector: str, objection: str,
+                    resolution: str, resolver: str, verified: bool | None) -> None:
+        self.conn.execute(
+            "INSERT INTO disputes (run_id, step_id, author, objector, objection, resolution, resolver, verified, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run_id, step_id, author, objector, objection, resolution, resolver,
+             None if verified is None else int(verified), time.time()),
+        )
+        self.conn.commit()
+
+    def disputes_for(self, run_id: int) -> list[sqlite3.Row]:
+        return list(self.conn.execute("SELECT * FROM disputes WHERE run_id = ? ORDER BY id", (run_id,)))
+
     # -- routing -----------------------------------------------------------
 
     def routing_stats(self, kind: str, model: str) -> tuple[int, int]:
@@ -171,6 +233,18 @@ class Store:
                 text=r["text"], applies_to=json.loads(r["applies_to"]), role=r["role"], confidence=r["confidence"],
                 id=r["id"], score=r["score"], uses=r["uses"],
             )
+            for r in rows
+        ]
+
+    def lessons_for_workspace(self, workspace: str, min_score: float = -1e9) -> list[Lesson]:
+        """Lessons learned from runs in this repository, oldest first (stable order for the committed file)."""
+        rows = self.conn.execute(
+            "SELECT l.* FROM lessons l JOIN runs r ON r.id = l.source_run WHERE r.workspace = ? AND l.score >= ? ORDER BY l.id",
+            (workspace, min_score),
+        )
+        return [
+            Lesson(text=r["text"], applies_to=json.loads(r["applies_to"]), role=r["role"], confidence=r["confidence"],
+                   id=r["id"], score=r["score"], uses=r["uses"])
             for r in rows
         ]
 

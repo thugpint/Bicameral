@@ -10,17 +10,18 @@ Run with: python -m bicameral.mcp_server   (stdio transport)
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from . import __version__, auth, config, models, paths
+from . import __version__, auth, config, gitops, models, paths
 from .edits import unified_diff
 from .engine import Attempt, Engine, RunConfig, dedupe_lessons, lessons_from_dicts
 from .evals.harness import format_report
-from .memory import Examples, Memory
+from .memory import Examples, Memory, RepoLessons
 from .orchestrator import StepResult, run_log
 from .providers import LLM, ProviderError, build_providers
 from .router import Choice
@@ -47,6 +48,8 @@ class StepInput(BaseModel):
     acceptance: str = Field(description="Concrete criterion the reviewer can check")
     suggested_role: str = Field(default="editor", description="'editor' (delegate) or 'architect' (do it yourself)")
     pin: bool = Field(default=False, description="True when the user named who must do this step; the router will not override suggested_role")
+    protect: list[str] = Field(default_factory=list, description="Paths this step must not modify (TDD: the test files, so the implementation cannot edit them)")
+    expect_red: bool = Field(default=False, description="True for a tests-first step: it must leave verification failing")
     rationale: str = ""
 
 
@@ -69,6 +72,7 @@ class Session:
     baseline_ok: bool | None
     lesson_ids: list[int]
     two_models: bool = True
+    commits: dict[int, str] = field(default_factory=dict)
     started: float = field(default_factory=time.time)
     routes: dict[int, Choice] = field(default_factory=dict)
     attempts: dict[int, int] = field(default_factory=dict)
@@ -84,7 +88,7 @@ class Session:
         raise ValueError(f"unknown step id {step_id}; valid: {[s.id for s in self.plan.steps]}")
 
     def enforce_verify(self, step_id: int) -> bool:
-        if not self.verify:
+        if not self.verify or self.step(step_id).expect_red:
             return False
         is_last = step_id == self.plan.steps[-1].id
         return bool(self.baseline_ok) or is_last
@@ -133,12 +137,22 @@ class Bicameral:
             lines.append(f"History: {ok}/{len(done)} runs succeeded; {len(self.store.lessons())} lessons stored")
         return "\n".join(lines)
 
-    def recall(self, task: str) -> str:
+    def recall(self, task: str, workspace: str = "") -> str:
         store = self.store
         lessons = Memory(store).retrieve(task, k=6)
         examples = Examples(store).retrieve(task, "feature", k=3)
         out = ["## Lessons from past runs (apply the ones that fit)"]
         out += [f"- ({l.role}; {', '.join(l.applies_to) or 'any'}; score {l.score:+.1f}) {l.text}" for l in lessons] or ["- none yet"]
+        if workspace:
+            try:
+                repo_lessons = RepoLessons(Workspace(workspace).root).read()
+            except NotADirectoryError:
+                repo_lessons = []
+            known = {l.text.strip() for l in lessons}
+            extra = [t for t in repo_lessons if t not in known]
+            if extra:
+                out.append(f"\n## Lessons committed in this repository ({RepoLessons.REL_PATH})")
+                out += [f"- {t}" for t in extra[:12]]
         out.append("\n## Similar accepted edits")
         for e in examples:
             out.append(f"- [{e.kind}] {e.description[:160]} (files: {', '.join(e.files)})")
@@ -154,7 +168,8 @@ class Bicameral:
     # -- run lifecycle ----------------------------------------------------------
 
     def _prepare(self, workspace: str, editor_model: str, task_kind: str, summary: str,
-                 steps: list[StepInput], verify_command: str, learning: bool) -> tuple[Workspace, Plan, Engine, RunConfig] | str:
+                 steps: list[StepInput], verify_command: str, learning: bool,
+                 gates: list[str] | None = None, commit: bool = False) -> tuple[Workspace, Plan, Engine, RunConfig] | str:
         try:
             ws = Workspace(workspace)
         except NotADirectoryError:
@@ -175,6 +190,7 @@ class Bicameral:
             architect_model=ARCHITECT_ID, editor_model=editor_model, learning=learning,
             verify_command=verify_command or None, max_attempts=int(user_cfg.get("max_attempts", 3)),
             editor_effort=str(user_cfg.get("editor_effort", "medium")),
+            gates=[g for g in (gates or []) if g.strip()], commit=commit,
         )
         llm = self._llm_factory()
         if editor_model not in ("", "self", ARCHITECT_ID):
@@ -202,9 +218,40 @@ class Bicameral:
         return (f"{editor_model} read the plan and raised {len(critique.concerns)} concern(s):\n{critique.as_text()}\n\n"
                 "Revise the steps where it is right (you may also disagree), then call bicameral_begin with the final plan.")
 
+    def review_diff(self, workspace: str, model: str, base: str = "HEAD", context: str = "") -> str:
+        """Review-only mode: an independent model reviews an existing diff; ungrounded findings are dropped."""
+        try:
+            ws = Workspace(workspace)
+        except NotADirectoryError:
+            return f"error: workspace is not a directory: {workspace}"
+        if not gitops.is_repo(ws.root):
+            return "error: review mode needs a git repository (the diff is taken against a git ref)"
+        try:
+            unified = gitops.diff(ws.root, base or "HEAD")
+        except gitops.GitError as e:
+            return f"error: {e}"
+        if not unified:
+            return f"nothing to review: the working tree matches {base or 'HEAD'}"
+        llm = self._llm_factory()
+        try:
+            llm.provider_for(model)
+        except ProviderError as e:
+            return f"error: {e}"
+        cfg = RunConfig(architect_model=ARCHITECT_ID, editor_model=model, learning=False, verify_command="")
+        engine = Engine(llm, self.store, ws, cfg)
+        try:
+            review, cost = engine.review_diff(model, unified, context)
+        except ProviderError as e:
+            return f"error: {e}"
+        files = sorted(gitops.hunk_ranges(unified))
+        return (f"Review of {len(files)} changed file(s) against {base or 'HEAD'} by {model} (${cost:.4f}):\n"
+                + review.as_text()
+                + "\n\nEvery finding above points at a line the diff touches. Check the high and medium ones yourself before relaying them.")
+
     def begin(self, task: str, workspace: str, editor_model: str, task_kind: str, summary: str,
-              steps: list[StepInput], verify_command: str = "", learning: bool = True) -> str:
-        prepared = self._prepare(workspace, editor_model, task_kind, summary, steps, verify_command, learning)
+              steps: list[StepInput], verify_command: str = "", learning: bool = True,
+              gates: list[str] | None = None, commit: bool = False) -> str:
+        prepared = self._prepare(workspace, editor_model, task_kind, summary, steps, verify_command, learning, gates, commit)
         if isinstance(prepared, str):
             return prepared
         ws, plan, engine, cfg = prepared
@@ -228,6 +275,10 @@ class Bicameral:
 
         out = [f"run_id: {run_id}", f"workspace: {ws.root}",
                f"verify: {verify or '(none)'}" + (f"  baseline: {'passing' if baseline else 'FAILING'}" if verify else ""),
+               f"gates: {', '.join(cfg.gates) if cfg.gates else '(none)'}",
+               "checkpoints: git refs under refs/bicameral/ (restorable with `bicameral restore`)" if engine.is_repo
+               else "checkpoints: in-memory only (not a git repository; an interrupted run cannot be restored later)",
+               f"commit per step: {'yes' if cfg.commit else 'no'}",
                f"learning: {'on' if learning else 'off'}", "", "Routing:"]
         for s in plan.steps:
             c = session.routes[s.id]
@@ -261,6 +312,7 @@ class Bicameral:
         fb = feedback or s.feedback.get(step_id, "")
         attempt_no = s.attempts[step_id]
 
+        s.engine.checkpoint(s.run_id, step_id, attempt_no)
         if choice.role == "architect":
             s.self_snapshots[step_id] = s.ws.snapshot_tree()
             return (
@@ -310,12 +362,24 @@ class Bicameral:
             attempt.verify_ok = res.ok
         enforce = s.enforce_verify(step_id)
         diff = attempt.diff if len(attempt.diff) <= 20000 else attempt.diff[:20000] + "\n... (diff truncated)"
+        s.engine.inspect(step, attempt, res)
+        checks = ""
+        if attempt.blocking:
+            checks += "BLOCKING (acceptance will be refused; reject with this as feedback):\n" + "".join(f"- {b}\n" for b in attempt.blocking)
+        if attempt.notes:
+            checks += "Checks:\n" + "".join(f"- {n}\n" for n in attempt.notes)
+        if attempt.gates and not attempt.blocking and all(g["ran"] and g["ok"] for g in attempt.gates):
+            checks += f"Gates: {len(attempt.gates)} passed.\n"
+        if step.expect_red and res is not None and not res.ok:
+            checks += "Verification is red, as this tests-first step requires.\n"
         opinion = ""
-        if second_opinion and s.two_models:
+        if second_opinion and s.two_models and not attempt.blocking:
             # You wrote this one, so the other mind reviews it before you judge your own work.
             try:
                 review, _ = s.engine.review(step, attempt.diff, res.output if res else None, reviewer=s.cfg.editor_model)
-                opinion = f"\nSecond opinion from {s.cfg.editor_model}: {review.as_text()}\nYou make the final call; weigh it, do not rubber-stamp it.\n"
+                attempt.second_opinion = review
+                opinion = (f"\nSecond opinion from {s.cfg.editor_model}: {review.as_text()}\n"
+                           "You make the final call. To accept over a rejection you must say why in feedback; the dispute is recorded.\n")
             except ProviderError as e:
                 opinion = f"\nSecond opinion unavailable ({e}).\n"
         return (
@@ -324,6 +388,7 @@ class Bicameral:
             + (f"EDITOR CONCERNS about this step (address or answer them in your review): {attempt.concerns[:800]}\n" if attempt.concerns else "")
             + f"\nAcceptance criterion: {step.acceptance}\n\n```diff\n{diff}\n```\n\nVerification: {verify_text}\n"
             + ("Verification MUST pass for this step to be accepted.\n" if enforce and res is not None else "")
+            + checks
             + opinion
             + "\nReview the diff against the acceptance criterion, then call bicameral_review(run_id, step_id, verdict, feedback)."
         )
@@ -343,17 +408,34 @@ class Bicameral:
         if verdict == "accept" and s.enforce_verify(step_id) and verify_ok is False:
             return ("refused: verification failed and this step must pass it. Reject with feedback describing the failure "
                     "(the edit will be rolled back), or fix the cause in a further attempt.")
+        if verdict == "accept" and attempt.blocking:
+            return "refused: deterministic checks block this edit:\n" + "\n".join(f"- {b}" for b in attempt.blocking) + "\nReject with this as feedback (the edit will be rolled back)."
+        overruled = attempt.second_opinion is not None and attempt.second_opinion.verdict == "reject"
+        if verdict == "accept" and overruled and not feedback.strip():
+            return (f"refused: {s.cfg.editor_model} rejected this diff ({attempt.second_opinion.feedback[:300]}). "
+                    "To accept anyway, pass feedback stating why it is wrong; the disagreement is recorded either way.")
 
         if verdict == "accept":
             s.pending.pop(step_id)
             verified = bool(s.verify) and verify_ok is True
             s.engine.record_success(step, choice.model, attempt, verified, bool(s.verify), s.run_id)
+            if overruled:
+                self.store.add_dispute(s.run_id, step_id, author=choice.model, objector=s.cfg.editor_model,
+                                       objection=attempt.second_opinion.feedback or "; ".join(attempt.second_opinion.issues),
+                                       resolution=feedback.strip(), resolver=ARCHITECT_ID, verified=verify_ok)
+            reviewer = ARCHITECT_ID if choice.role == "editor" else (s.cfg.editor_model if s.two_models else ARCHITECT_ID)
+            sha = s.engine.commit_step(s.run_id, step, attempt, choice.model, reviewer) if (verified or not s.verify) else None
+            if sha:
+                s.commits[step_id] = sha
             result = StepResult(step.id - 1, step.title, step.kind, choice.model, choice.role, s.attempts[step_id], True, verified, "", attempt.diff, attempt.cost_usd)
             s.results[step_id] = result
             self.store.add_step(s.run_id, step_idx=step.id - 1, title=step.title, kind=step.kind, model=choice.model, role=choice.role,
-                                attempts=result.attempts, accepted=1, verified=int(verified), feedback="", cost_usd=attempt.cost_usd)
+                                attempts=result.attempts, accepted=1, verified=int(verified), feedback="", cost_usd=attempt.cost_usd,
+                                commit_sha=sha, touched=json.dumps(attempt.touched), gates=json.dumps(attempt.gates))
             nxt = [x.id for x in s.plan.steps if x.id not in s.results]
-            return (f"step {step_id} accepted ({'verified' if verified else 'unverified'}).\n"
+            return (f"step {step_id} accepted ({'verified' if verified else 'unverified'})"
+                    + (f", committed {sha[:10]}" if sha else "")
+                    + (f"; dispute with {s.cfg.editor_model} recorded" if overruled else "") + ".\n"
                     + (f"Next: bicameral_execute(run_id, step_id={nxt[0]})." if nxt else "All steps done. Call bicameral_finish(run_id, success=true, lessons=[...])."))
 
         # reject
@@ -406,6 +488,7 @@ class Bicameral:
         editor_lessons = [l for l in dedupe_lessons(editor_lessons) if " ".join(l.text.lower().split()) not in known]
         s.engine.credit_lessons(s.lesson_ids, success)
         s.engine.remember(new_lessons + editor_lessons, s.run_id)
+        repo_written = RepoLessons(s.ws.root).write(self.store.lessons_for_workspace(str(s.ws.root))) if s.cfg.learning else 0
         duration = time.time() - s.started
         self.store.finish_run(
             s.run_id, task_kind=s.plan.task_kind, success=int(success), steps_total=len(s.plan.steps),
@@ -422,10 +505,22 @@ class Bicameral:
             lines.append("lessons stored: " + "; ".join(l.text for l in new_lessons))
         if editor_lessons:
             lines.append(f"lessons from {s.cfg.editor_model}: " + "; ".join(l.text for l in editor_lessons))
+        if repo_written:
+            lines.append(f"{repo_written} lesson(s) for this repo mirrored into {RepoLessons.REL_PATH} (commit it to share them)")
+        disputes = self.store.disputes_for(s.run_id)
+        if disputes:
+            lines.append("disputes (the other mind objected, you overruled):")
+            lines += [f"- step {d['step_id']}: {d['objector']} said: {d['objection'][:160]} | you said: {d['resolution'][:160]}"
+                      + (" | verification: pass" if d["verified"] else (" | verification: FAIL" if d["verified"] == 0 else "")) for d in disputes]
+        if s.commits:
+            lines.append("commits: " + ", ".join(f"step {k} -> {v[:10]}" for k, v in sorted(s.commits.items()))
+                         + f". `bicameral undo {s.run_id}` reverts them.")
+        if s.engine.is_repo:
+            lines.append(f"checkpoints: `bicameral restore {s.run_id}` puts the tree back to before this run.")
         changed = s.ws.run("git status --short", timeout=30)
         if changed.ok and changed.output:
             lines.append("\nUncommitted changes in the working tree:\n```\n" + changed.output[-2000:] + "\n```")
-            lines.append("Nothing was committed. Tell the user these files changed and that `git diff` shows the full change; they commit when happy.")
+            lines.append("Tell the user these files changed and that `git diff` shows the full change; they commit when happy.")
         lines.append("\nRun log for your reflection:\n" + log_text)
         return "\n".join(lines)
 
@@ -464,9 +559,16 @@ def build_server():
     def bicameral_status() -> str:
         return _app.status()
 
-    @server.tool(description="Lessons, similar accepted edits and routing track record relevant to a task. Call before planning.")
-    def bicameral_recall(task: str) -> str:
-        return _app.recall(task)
+    @server.tool(description=("Lessons, similar accepted edits and routing track record relevant to a task, plus lessons committed "
+                              "in the repository's .bicameral/lessons.md. Call before planning."))
+    def bicameral_recall(task: str, workspace: str = "") -> str:
+        return _app.recall(task, workspace)
+
+    @server.tool(description=("Review-only mode: an independent model reviews the working tree's diff against a git ref "
+                              "(default HEAD) and returns findings with file:line, each verified to point at a line the diff "
+                              "touches. No plan, no edits. Use when the user asks for a review or a second opinion on a change."))
+    def bicameral_review_diff(workspace: str, model: str, base: str = "HEAD", context: str = "") -> str:
+        return _app.review_diff(workspace, model, base, context)
 
     @server.tool(description=("Ask the editor model to critique your draft plan before anything is edited: under-specified steps, "
                               "wrong files, missing steps, unverifiable acceptance criteria. Same arguments as bicameral_begin. "
@@ -479,8 +581,11 @@ def build_server():
                               "(set pin=true on a step to forbid the router from overriding suggested_role), "
                               "runs the baseline verification, and returns the routing. editor_model may be 'self' to do every step yourself."))
     def bicameral_begin(task: str, workspace: str, editor_model: str, task_kind: str, summary: str,
-                        steps: list[StepInput], verify_command: str = "", learning: bool = True) -> str:
-        return _app.begin(task, workspace, editor_model, task_kind, summary, steps, verify_command, learning)
+                        steps: list[StepInput], verify_command: str = "", learning: bool = True,
+                        gates: list[str] | None = None, commit: bool = False) -> str:
+        """gates: deterministic commands (lint, typecheck, build) run on every applied edit before review; a failing
+        gate blocks acceptance. commit: commit each accepted, verified step with Bicameral-Author/Reviewer trailers."""
+        return _app.begin(task, workspace, editor_model, task_kind, summary, steps, verify_command, learning, gates, commit)
 
     @server.tool(description=("Execute one step. Delegated steps are edited by the editor model and come back as a diff plus "
                               "verification output; steps routed to you return instructions to edit yourself. Pass feedback on retries."))

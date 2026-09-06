@@ -85,3 +85,49 @@ class Examples:
         if not diff.strip():
             return
         self.store.add_example(kind, description, files, diff[: self.MAX_DIFF_CHARS], model, run_id)
+
+
+class RepoLessons:
+    """Lessons learned in one repository, mirrored into `.bicameral/lessons.md` so they can be committed.
+
+    The file is regenerated from the store after every run in a stable order, capped, so its diff in a
+    pull request is readable. Lines written by teammates (present in the file, absent from the local
+    store) are still read back at recall time.
+    """
+
+    REL_PATH = ".bicameral/lessons.md"
+    CAP = 40
+    HEADER = (
+        "# Bicameral lessons for this repository\n\n"
+        "Written by Bicameral after each run; commit it so teammates' runs benefit. One lesson per line. "
+        "Delete lines you disagree with; the next run will not resurrect them unless it re-learns them.\n\n"
+    )
+
+    def __init__(self, root):
+        from pathlib import Path
+
+        self.path = Path(root) / self.REL_PATH
+
+    def read(self) -> list[str]:
+        if not self.path.is_file():
+            return []
+        out = []
+        for line in self.path.read_text("utf-8").splitlines():
+            if line.startswith("- "):
+                text = line[2:]
+                if ") " in text and text.startswith("("):
+                    text = text.split(") ", 1)[1]
+                out.append(text.strip())
+        return out
+
+    def write(self, lessons: list[Lesson]) -> int:
+        keep = [l for l in lessons if l.text.strip() and l.score > Memory.PRUNE_BELOW][-self.CAP:]
+        existing = set(self.read())
+        for l in keep:
+            existing.discard(l.text.strip())
+        if not keep and not self.path.exists():
+            return 0
+        lines = [f"- ({', '.join(l.applies_to) or 'any'}; {l.role}; {l.score:+.1f}) {l.text.strip()}" for l in keep]
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(self.HEADER + "\n".join(lines) + ("\n" if lines else ""), "utf-8", newline="\n")
+        return len(keep)

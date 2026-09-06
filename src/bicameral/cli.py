@@ -12,7 +12,7 @@ import getpass
 import sys
 from pathlib import Path
 
-from . import __version__, auth, config, credentials, install, models, paths
+from . import __version__, auth, config, credentials, gitops, install, models, paths
 from .evals import harness
 from .memory import Memory
 from .orchestrator import Orchestrator, OrchestratorError, RunConfig
@@ -133,6 +133,7 @@ def _run_config(args: argparse.Namespace, architect: str, editor: str, learning:
         architect_model=architect, editor_model=editor, learning=learning, verify_command=verify,
         max_attempts=getattr(args, "attempts", None) or int(cfg.get("max_attempts", 3)),
         architect_effort=str(cfg.get("architect_effort", "high")), editor_effort=str(cfg.get("editor_effort", "medium")),
+        gates=list(getattr(args, "gate", []) or []), commit=bool(getattr(args, "commit", False)),
     )
 
 
@@ -207,6 +208,71 @@ def cmd_lessons(prune: bool = False) -> int:
     return 0
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    from .mcp_server import Bicameral
+
+    llm = _llm()
+    available = llm.available()
+    model = args.model or config.load().get("last_editor")
+    if not model or model not in available:
+        _, model = resolve_models(None, args.model, available)
+    store = _store()
+    try:
+        print(Bicameral(store=store, llm_factory=lambda: llm).review_diff(args.path, model, args.base, args.context or ""))
+    finally:
+        store.close()
+    return 0
+
+
+def cmd_restore(run_id: int, path: str | None, step: int | None) -> int:
+    store = _store()
+    try:
+        run = store.run(run_id)
+        if run is None:
+            print(f"no run {run_id}")
+            return 2
+        points = store.checkpoints_for(run_id)
+        if step is not None:
+            points = [c for c in points if c["step_id"] == step]
+        if not points:
+            print(f"run {run_id} has no git checkpoints" + (f" for step {step}" if step else "") + " (not a git repository at the time, or nothing was executed)")
+            return 2
+        target = points[0]
+        root = Path(path or run["workspace"])
+        try:
+            gitops.restore(root, target["sha"])
+        except gitops.GitError as e:
+            print(f"restore failed: {e}")
+            return 1
+        print(f"restored {root} to the checkpoint before run {run_id} step {target['step_id']} ({target['sha'][:10]}, {target['ref']})")
+    finally:
+        store.close()
+    return 0
+
+
+def cmd_undo(run_id: int, path: str | None) -> int:
+    store = _store()
+    try:
+        run = store.run(run_id)
+        if run is None:
+            print(f"no run {run_id}")
+            return 2
+        shas = [s["commit_sha"] for s in store.steps_for(run_id) if s["commit_sha"]]
+        if not shas:
+            print(f"run {run_id} made no commits (it ran without commit=true); use `bicameral restore {run_id}` for the checkpoint instead")
+            return 2
+        root = Path(path or run["workspace"])
+        try:
+            made = gitops.revert(root, list(reversed(shas)))
+        except gitops.GitError as e:
+            print(f"undo failed: {e}")
+            return 1
+        print(f"reverted {len(shas)} commit(s) from run {run_id}: " + ", ".join(s[:10] for s in made))
+    finally:
+        store.close()
+    return 0
+
+
 def cmd_gui(path: str | None, port: int, no_browser: bool) -> int:
     from .gui import serve
 
@@ -235,6 +301,9 @@ def _add_model_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--architect", help="model id for planning and review (e.g. claude:opus, claude-opus-5)")
     p.add_argument("--editor", help="model id for writing diffs (e.g. codex:gpt-5-codex, claude:sonnet, gpt-5-codex)")
     p.add_argument("--attempts", type=int, help="max attempts per step (default 3)")
+    p.add_argument("--gate", action="append", default=[], metavar="CMD",
+                   help="deterministic check run on every edit before review (repeatable), e.g. --gate 'ruff check .'")
+    p.add_argument("--commit", action="store_true", help="commit each accepted, verified step with provenance trailers")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -282,6 +351,21 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--only", nargs="*", help="task ids to include")
     _add_model_flags(s)
 
+    s = sub.add_parser("review", help="review-only: a second model reviews the working tree's diff, findings grounded to the diff")
+    s.add_argument("--path", default=".", help="repository directory (default: cwd)")
+    s.add_argument("--base", default="HEAD", help="git ref to diff against (default HEAD)")
+    s.add_argument("--model", help="reviewer model id (default: last editor)")
+    s.add_argument("--context", help="one line of context for the reviewer, e.g. the task")
+
+    s = sub.add_parser("restore", help="put the working tree back to a run's git checkpoint (undoes an interrupted run)")
+    s.add_argument("run_id", type=int)
+    s.add_argument("--path", help="repository directory (default: the run's workspace)")
+    s.add_argument("--step", type=int, help="restore to the checkpoint taken before this step instead of the first")
+
+    s = sub.add_parser("undo", help="git revert the commits a run made with --commit / commit=true")
+    s.add_argument("run_id", type=int)
+    s.add_argument("--path", help="repository directory (default: the run's workspace)")
+
     sub.add_parser("stats", help="success rates, routing table and eval report")
 
     s = sub.add_parser("lessons", help="show learned lessons")
@@ -316,6 +400,12 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_run(args)
     if cmd == "eval":
         return cmd_eval(args)
+    if cmd == "review":
+        return cmd_review(args)
+    if cmd == "restore":
+        return cmd_restore(args.run_id, args.path, args.step)
+    if cmd == "undo":
+        return cmd_undo(args.run_id, args.path)
     if cmd == "stats":
         return cmd_stats()
     if cmd == "lessons":

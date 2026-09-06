@@ -82,6 +82,7 @@ class Orchestrator:
         last: Attempt | None = None
         while attempts < self.cfg.max_attempts:
             attempts += 1
+            eng.checkpoint(run_id, step.id, attempts)
             last = eng.edit(choice.model, step, plan_summary, examples, lessons, feedback)
             cost += last.cost_usd
             if not last.applied:
@@ -94,6 +95,14 @@ class Orchestrator:
             res = eng.verify(verify)
             verify_output = res.output if res else None
             verify_ok = res.ok if res else True
+            eng.inspect(step, last, res)
+            for note in last.notes:
+                self.log(f"    note: {note[:200]}")
+            if last.blocking:
+                eng.rollback(last)
+                feedback = "\n".join(last.blocking)
+                self.log(f"    blocked: {last.blocking[0][:200]}")
+                continue
             if last.concerns:
                 self.log(f"    editor concerns: {last.concerns[:200]}")
             reviewer = eng.reviewer_for(choice.model)
@@ -105,13 +114,15 @@ class Orchestrator:
                 eng.rollback(last)
                 feedback = review.feedback or "; ".join(review.issues)
                 continue
-            if verify and not verify_ok and enforce_verify:
+            if verify and not verify_ok and enforce_verify and not step.expect_red:
                 eng.rollback(last)
                 feedback = f"The verification command `{verify}` failed after your edit:\n{verify_output}"
                 continue
 
             verified = bool(verify) and verify_ok
             eng.record_success(step, choice.model, last, verified, bool(verify), run_id)
+            if verified or not verify:
+                eng.commit_step(run_id, step, last, choice.model, reviewer)
             return StepResult(idx, step.title, step.kind, choice.model, choice.role, attempts, True, verified, "", last.diff, cost)
 
         eng.record_failure(step, choice.model)

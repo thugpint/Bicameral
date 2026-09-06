@@ -34,6 +34,8 @@ STEP_SCHEMA = _obj(
         "acceptance": _STR,
         "suggested_role": {"type": "string", "enum": list(ROLES)},
         "pin": {"type": "boolean"},
+        "protect": _arr(_STR),
+        "expect_red": {"type": "boolean"},
         "rationale": _STR,
     }
 )
@@ -64,6 +66,24 @@ CRITIQUE_SCHEMA = _obj(
     {
         "assessment": _STR,
         "concerns": _arr(_obj({"step": {"type": "integer"}, "issue": _STR, "suggestion": _STR})),
+    }
+)
+
+FINDINGS_SCHEMA = _obj(
+    {
+        "verdict": {"type": "string", "enum": ["approve", "request_changes"]},
+        "summary": _STR,
+        "findings": _arr(
+            _obj(
+                {
+                    "file": _STR,
+                    "line": {"type": "integer"},
+                    "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+                    "issue": _STR,
+                    "suggestion": _STR,
+                }
+            )
+        ),
     }
 )
 
@@ -102,6 +122,8 @@ class Step:
     suggested_role: str
     rationale: str = ""
     pin: bool = False  # the router must honour suggested_role (the user named who does this step)
+    protect: list[str] = field(default_factory=list)  # paths the step must not modify (e.g. tests during TDD)
+    expect_red: bool = False  # the step must leave verification failing (tests written before the code)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any], idx: int) -> Step:
@@ -117,6 +139,8 @@ class Step:
             suggested_role=role,
             rationale=str(d.get("rationale", "")),
             pin=bool(d.get("pin", False)),
+            protect=[str(p).replace("\\", "/").strip("/") for p in d.get("protect", []) if p],
+            expect_red=bool(d.get("expect_red", False)),
         )
 
 
@@ -234,3 +258,59 @@ class Lesson:
     id: int | None = None
     score: float = 0.0
     uses: int = 0
+
+
+@dataclass
+class Finding:
+    file: str
+    line: int
+    severity: str
+    issue: str
+    suggestion: str
+
+
+@dataclass
+class DiffReview:
+    verdict: str
+    summary: str
+    findings: list[Finding]
+    dropped: int = 0  # findings whose file:line did not exist in the diff
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> DiffReview:
+        findings = []
+        for f in d.get("findings", []):
+            try:
+                line = int(f.get("line", 0))
+            except (TypeError, ValueError):
+                line = 0
+            sev = f.get("severity") if f.get("severity") in ("high", "medium", "low") else "medium"
+            findings.append(Finding(str(f.get("file", "")).replace("\\", "/").lstrip("./"), line, sev,
+                                    str(f.get("issue", "")).strip(), str(f.get("suggestion", "")).strip()))
+        verdict = "approve" if d.get("verdict") == "approve" else "request_changes"
+        return cls(verdict, str(d.get("summary", "")).strip(), findings)
+
+    def ground(self, ranges: dict[str, list[tuple[int, int]]]) -> DiffReview:
+        """Keep only findings that point at a file and line the diff actually touches."""
+        kept = []
+        for f in self.findings:
+            spans = ranges.get(f.file)
+            if spans is None:
+                continue
+            if f.line and not any(a <= f.line <= b for a, b in spans):
+                continue
+            kept.append(f)
+        dropped = len(self.findings) - len(kept)
+        verdict = self.verdict
+        if verdict == "request_changes" and not any(f.severity in ("high", "medium") for f in kept):
+            verdict = "approve"
+        return DiffReview(verdict, self.summary, kept, dropped)
+
+    def as_text(self) -> str:
+        lines = [f"verdict: {self.verdict}" + (f" ({self.summary})" if self.summary else "")]
+        for f in self.findings:
+            where = f"{f.file}:{f.line}" if f.line else f.file
+            lines.append(f"- [{f.severity}] {where}: {f.issue}" + (f" -> {f.suggestion}" if f.suggestion else ""))
+        if self.dropped:
+            lines.append(f"({self.dropped} finding(s) dropped: they cited a file or line the diff does not touch)")
+        return "\n".join(lines)

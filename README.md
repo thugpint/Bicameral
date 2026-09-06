@@ -41,6 +41,44 @@ Claude Code becomes the **Architect**: it investigates the repo, writes a small 
 
 No API keys required. Your existing Claude and ChatGPT subscriptions are enough.
 
+## Features
+
+**Two minds, not one mind and a pair of hands**
+
+- The Editor critiques the plan before the first edit; the Architect revises once.
+- Whoever did not write a diff reviews it. The Editor reviews the Architect's own edits before the Architect decides.
+- The Editor can attach concerns to any diff it produces.
+- Overruling the other mind requires a stated reason. The disagreement is recorded with the test result as evidence.
+- Both models write lessons at the end of a run; duplicates are merged.
+
+**Verification that cannot be talked out of**
+
+- Your test command runs after every edit; acceptance is refused while required tests fail.
+- Deterministic gates (lint, typecheck, build) run in-process with explicit arguments before any model reviews. A failing gate blocks acceptance. A gate that cannot start is reported as a configuration error, never as a pass.
+- Tests-first steps must leave the suite red; the implementing step cannot edit the test files. Reward hacking by editing tests is blocked mechanically, not by prompt.
+- Every edit is checked against the files the step declared: out-of-scope changes and untouched declared files are reported.
+- Rejected or failing edits are rolled back to a snapshot and retried with feedback, up to three times.
+
+**Git you can trust**
+
+- Durable checkpoints: before every attempt the whole tree is snapshotted as a commit under `refs/bicameral/`, through a temporary index. Your staging area is untouched, nothing in `.git` is renamed, and `git gc` keeps the objects. `bicameral restore <run>` undoes an interrupted run days later.
+- Optional per-step commits with your own git identity and `Bicameral-Author` / `Bicameral-Reviewer` trailers, made only after verification passes. `bicameral undo <run>` reverts them by sha.
+- Review-only mode: `bicameral review` (or `/bicameral review`) has a second model review your working tree against a ref. Every finding must cite a file and line the diff touches; the rest are dropped before you see them.
+
+**Learning you can measure**
+
+- A Thompson-sampling router decides per step whether the Editor or the Architect executes, from the track record per (step kind, model). Steps the user assigned by name are pinned.
+- Lessons are scored by whether the runs that used them succeeded, and pruned when they stop paying.
+- This repo's lessons are mirrored into `.bicameral/lessons.md`, a capped, stably ordered file you commit so teammates' runs benefit. Lines they add by hand are read back.
+- Accepted, verified diffs are retrieved as few-shot examples for similar steps.
+- A learning-off baseline and an eval harness, so "self-improving" is a number.
+
+**Runs where you are**
+
+- A Claude Code skill and a local MCP server; the same engine from the CLI, a browser GUI and a terminal dashboard.
+- Your Claude and ChatGPT subscriptions, or API keys if you prefer. Everything stays on your machine.
+- Runs that were cut off are labelled interrupted, not left as running forever.
+
 <p align="center">
   <img src="assets/gui-home.png" alt="Bicameral setup page: three checks (Claude Code signed in, a coder added, /bicameral connected) and the command ready to copy." width="92%">
 </p>
@@ -145,7 +183,16 @@ What happens:
 3. **Each step is written, tested and reviewed by the other mind.** The coder edits the files, your tests run, and Claude reviews the diff against the step's check. When Claude writes a step itself, the coder reviews that diff before Claude makes the call. A rejected or failing edit is rolled back and retried with feedback, up to three times.
 4. **You get a report:** what changed, who wrote each step, how many tries it took, what the coder pushed back on, and whether the tests pass. Nothing is committed; the report lists the changed files and you commit when you are happy.
 
-Say who should do what and it sticks: "let Codex write the tests" pins those steps to the coder, so the router's exploration never swaps authors.
+Say who should do what and it sticks: "let Codex write the tests" pins those steps to the coder, so the router's exploration never swaps authors. Ask for TDD and the test-writing step must leave the suite red before the implementing step, which cannot touch the test files.
+
+Ask for a review instead of a task and nothing is edited:
+
+```text
+/bicameral review
+/bicameral review main
+```
+
+The coder reviews your working tree against that ref and returns findings with file and line. Findings that point at lines the diff does not touch are dropped before you see them.
 
 Tasks work best when they are small and concrete. "Fix the failing test in `test_parser.py`" beats "improve the parser".
 
@@ -155,6 +202,10 @@ The setup page has a **Run a task** tab: type what you want, pick a folder, pick
 
 ```bash
 bicameral run "fix the failing test" --path ./myproject --architect claude:opus --editor codex:gpt-5-codex
+bicameral run "add --dry-run" --gate "{python} -m ruff check ." --commit     # lint gate on every edit, commit each verified step
+bicameral review --base main --model codex:gpt-5-codex                        # review-only, findings grounded to the diff
+bicameral restore 12                                                          # put the tree back to before run 12
+bicameral undo 12                                                             # git revert the commits run 12 made
 ```
 
 ### The setup page, tab by tab
@@ -177,7 +228,8 @@ There is also a terminal dashboard (`bicameral tui`) with the same information, 
 
 ## Good to know
 
-- **It never commits.** Every edit is snapshotted first, reviewed, and rolled back on rejection. Anything left unreviewed at the end of a run is rolled back too. You always get a clean working tree to inspect.
+- **It does not commit unless you ask.** Every edit is snapshotted first, reviewed, and rolled back on rejection. Anything left unreviewed at the end of a run is rolled back too. With `commit` on, each verified step becomes a commit under your identity, with provenance trailers, and `bicameral undo` reverts them.
+- **Checkpoints live in your git.** In a git repository every attempt is snapshotted as a commit under `refs/bicameral/` before the edit. Your index is never touched. `bicameral restore <run>` brings the tree back even after Claude Code was closed mid-run.
 - **It uses your subscriptions.** Claude Code runs on your Claude account, Codex on your ChatGPT account. Those show as $0 in the spend tile. API keys are optional and only for pay-per-token use.
 - **Sign-in never happens on the page.** The buttons open the vendors' own login windows (`claude auth login`, `codex login`). On Windows a new console window opens; that is expected. Finish the login there and the page updates itself.
 - **Everything stays on your computer.** The page runs on `127.0.0.1` with a per-session token. The only network traffic is the model calls you already make.
@@ -238,7 +290,7 @@ One run of `/bicameral`, step by step:
 1. **Status and model choice.** Claude checks which Editor backends are signed in and asks which one to use. Your last choice is recommended.
 2. **Recall.** Lessons from past runs, similar accepted diffs, and the routing track record are pulled into context *before* planning.
 3. **Plan, then critique.** Claude reads the repo and drafts 1–4 small steps, each with the files to touch, an acceptance criterion, a suggested role, and the test command. The Editor reads the draft and the files it touches and returns concrete concerns; Claude revises, then registers the plan. Steps the user assigned by name are pinned and never rerouted.
-4. **Route, edit, verify, cross-review.** For every step the server decides who executes it. The Editor's diff comes back with the test output and any concerns the Editor has about the step; Claude reviews it against the acceptance criterion. When the step stays with Claude, the Editor reviews Claude's diff first and Claude gets that second opinion before deciding. Rejections roll back the files and retry with feedback, up to three times. Acceptance is refused while required tests fail.
+4. **Checkpoint, route, edit, verify, gate, cross-review.** Before each attempt the tree is checkpointed in git. The server decides who executes the step. The diff comes back with the test output, the gate results, a scope check against the declared files, and any concerns the Editor has; Claude reviews it against the acceptance criterion. When the step stays with Claude, the Editor reviews Claude's diff first and Claude gets that second opinion before deciding; overruling it requires a stated reason. Rejections roll back the files and retry with feedback, up to three times. Acceptance is refused while required tests or gates fail, while a protected file was modified, or while a tests-first step is green.
 5. **Finish and reflect.** Final verification, outcome logging, and 0–3 transferable lessons from each mind (duplicates merged). The report lists the uncommitted files; a run cut off before this point is marked interrupted in History rather than left hanging.
 
 ## Design notes
@@ -250,7 +302,11 @@ Plenty of tools split "planner" and "coder". Bicameral is about the loop around 
 | Runs inside Claude Code as a skill | `/bicameral` | usually a separate CLI |
 | Uses your subscriptions, no API key | Claude + ChatGPT sign-in | API keys |
 | Reviewer gate with test verification | every step, auto-rollback | prompt-only review, if any |
-| The coder talks back | critiques the plan, reviews the planner's own diffs, flags concerns | executes silently |
+| Deterministic gates before the model's verdict | lint / typecheck / build in-process; cannot-run is not a pass | none, or shell hooks that fail silently |
+| The coder talks back | critiques the plan, reviews the planner's own diffs, flags concerns, disputes recorded | executes silently |
+| Checkpoints | commits under `refs/bicameral/`, restorable after a crash | shadow git or in-memory, lost on restart |
+| TDD | red-first enforced, test files protected from the implementer | prompts only |
+| Review of an existing diff | findings grounded to the diff's lines | unverified file:line claims |
 | Decides who executes each step | learned bandit over (step kind, model) | fixed roles |
 | Learns from outcomes | scored lessons, retrieved examples | no memory, or unscored notes |
 | Baseline mode to measure the learning | `--baseline` and an eval harness | — |
@@ -262,6 +318,7 @@ The pieces, in one paragraph each:
 - **Two voices.** The Editor critiques the plan before the first edit, can attach concerns to any diff it produces, and gives a second opinion on the Architect's own diffs. The Architect still decides, but it decides with the other mind's objection in front of it.
 - **Reflective memory.** After each run both models write 0–3 transferable lessons. They are retrieved by relevance for later tasks and scored by whether the runs they were used in succeeded. Losers get pruned.
 - **Retrieved examples.** Diffs that passed both review and verification are shown to the Editor as few-shot examples on similar steps.
+- **Deterministic before probabilistic.** Gates, protected paths, red-first checks and the scope check run before any model gives a verdict, and their results are recorded per step. A model cannot argue past them.
 - **Evaluation.** Fixture repos with failing tests, pass/fail per task, and a learning-off baseline, so "self-improving" is a number rather than a claim.
 
 ## Measuring the learning
@@ -302,12 +359,13 @@ Inside Claude Code the Architect is always the host session (recorded as `claude
 
 ```text
 src/bicameral/
-  mcp_server.py     the tools Claude Code calls: status, recall, critique, begin, execute, check, review, finish, stats
+  mcp_server.py     the tools Claude Code calls: status, recall, critique, begin, execute, check, review, finish, review_diff, stats
+  gitops.py         checkpoints under refs/bicameral/, step commits, revert, review diffs, hunk parsing
   skill/SKILL.md    the /bicameral skill: the Architect protocol
   engine.py         plan / route / edit / verify / review / rollback / record / reflect, shared by both loops
   orchestrator.py   standalone loop (CLI, evals, GUI "Run a task")
   router.py         Thompson-sampling bandit over (step kind, model)
-  memory.py         lessons and examples, BM25 retrieval, scoring and pruning
+  memory.py         lessons and examples, BM25 retrieval, scoring and pruning, the repo's .bicameral/lessons.md
   providers/        anthropic (API/OAuth profile), openai (API), claude_cli, codex_cli
   auth.py           who is signed in to what, and how to sign in
   install.py        writes the skill, registers the MCP server via `claude mcp add`
@@ -315,7 +373,7 @@ src/bicameral/
   tui/              the Textual terminal dashboard
   evals/            harness and bundled fixture tasks
   __main__.py       `python -m bicameral` == `bicameral`
-tests/              71 offline tests with scripted fake backends
+tests/              88 offline tests with scripted fake backends
 ```
 
 ## FAQ
@@ -330,7 +388,7 @@ Yes. Pick `claude:sonnet` (or any Claude) as the Editor, or answer "Do it all my
 The hosted flow is a Claude Code skill. The standalone loop (`bicameral run`, the GUI's Run a task) works anywhere with any two supported models.
 
 **Is it safe to let it edit my repo?**
-Every edit is snapshotted first, reviewed by the Architect, and rolled back on rejection or at the end of a run if unreviewed. It never runs `git commit`.
+Every edit is snapshotted first, reviewed by the model that did not write it, and rolled back on rejection or at the end of a run if unreviewed. In a git repository each attempt is also checkpointed under `refs/bicameral/`, so `bicameral restore <run>` recovers the tree even if the session died. It only runs `git commit` when you turn that on.
 
 **Why does Claude sometimes do a step itself when I picked Codex?**
 The router explores. On a fresh install it follows Claude's suggestion about four times out of five and tries the other model the rest of the time, so it can learn who is better at what. The Learning tab shows the track record it builds. If a step must be done by a particular model, say so in the task ("Codex writes the tests"); Claude pins it and the router leaves it alone.
@@ -350,7 +408,7 @@ python -m venv .venv
 .venv/Scripts/python -m pytest -q
 ```
 
-The 71 tests run fully offline against scripted fake backends (`tests/fake.py`); no account or API key is needed. CI runs them on Linux and Windows against Python 3.11 and 3.12.
+The 88 tests run fully offline against scripted fake backends (`tests/fake.py`) and a throwaway git repository; no account or API key is needed. CI runs them on Linux and Windows against Python 3.11 and 3.12.
 
 Style: 120-column lines, type hints, dataclasses, standard library first. Ruff is configured in `pyproject.toml`; run `ruff check src tests` if you have it. Keep changes surgical and match the surrounding code. The layout table above says where each part lives. Issues and pull requests are welcome.
 

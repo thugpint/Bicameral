@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import prompts
+from . import gitops, prompts
 from .edits import EditError, apply_edits, unified_diff
 from .memory import Example, Examples, Memory
 from .providers import LLM, ProviderError
@@ -19,11 +19,13 @@ from .router import Choice, Router
 from .schemas import (
     CRITIQUE_SCHEMA,
     EDIT_SCHEMA,
+    FINDINGS_SCHEMA,
     PLAN_SCHEMA,
     REFLECT_SCHEMA,
     REVIEW_SCHEMA,
     TASK_KINDS,
     Critique,
+    DiffReview,
     EditResult,
     Lesson,
     Plan,
@@ -51,6 +53,8 @@ class RunConfig:
     editor_effort: str = "medium"
     max_steps: int = 12
     max_file_rounds: int = 2
+    gates: list[str] = field(default_factory=list)  # deterministic checks run before any review
+    commit: bool = False  # commit each accepted, verified step with provenance trailers
 
 
 @dataclass
@@ -67,10 +71,15 @@ class Attempt:
     concerns: str = ""  # the editor's disagreement with the step, if any
     cost_usd: float = 0.0
     verify_ok: bool | None = None  # filled in once verification has run on this attempt
+    gates: list[dict[str, Any]] = field(default_factory=list)  # [{command, ran, ok}]
+    blocking: list[str] = field(default_factory=list)  # reasons acceptance must be refused
+    notes: list[str] = field(default_factory=list)  # scope and gate observations for the reviewer
+    second_opinion: Review | None = None  # the other mind's review of this diff, when it did not write it
 
 
 class Engine:
     def __init__(self, llm: LLM, store: Store, workspace: Workspace, cfg: RunConfig, log: Logger | None = None):
+        self._is_repo: bool | None = None
         self.llm = llm
         self.store = store
         self.ws = workspace
@@ -110,6 +119,80 @@ class Engine:
         if self.two_models and author == self.cfg.architect_model:
             return self.cfg.editor_model
         return self.cfg.architect_model
+
+    @property
+    def is_repo(self) -> bool:
+        if self._is_repo is None:
+            self._is_repo = gitops.is_repo(self.ws.root)
+        return self._is_repo
+
+    # -- checkpoints, gates, commits ---------------------------------------------
+
+    def checkpoint(self, run_id: int, step_id: int, attempt: int) -> str | None:
+        """A durable git checkpoint of the whole tree before an edit, or None outside a git repo."""
+        if not self.is_repo:
+            return None
+        ref = f"refs/bicameral/run-{run_id}/step-{step_id}-attempt-{attempt}"
+        try:
+            sha = gitops.checkpoint(self.ws.root, ref, f"bicameral checkpoint: run {run_id} step {step_id} attempt {attempt}")
+        except gitops.GitError as e:
+            self.log(f"    checkpoint skipped: {e}")
+            return None
+        self.store.add_checkpoint(run_id, step_id, attempt, ref, sha)
+        return sha
+
+    def inspect(self, step: Step, attempt: Attempt, verify: CommandResult | None) -> None:
+        """Deterministic checks on an applied edit. Fills attempt.blocking / attempt.notes / attempt.gates.
+
+        Blocking: a protected path was modified, a red-first step left the tests green, a gate failed.
+        Notes: files touched outside the step's declared set, declared files left untouched, a gate
+        that could not be started (a configuration error, never treated as a pass).
+        """
+        touched = {p.replace("\\", "/") for p in attempt.touched}
+        declared = {f.replace("\\", "/").strip("/") for f in step.files if f}
+        if declared:
+            outside = sorted(touched - declared)
+            missing = sorted(declared - touched)
+            if outside:
+                attempt.notes.append("touched outside the declared files: " + ", ".join(outside))
+            if missing:
+                attempt.notes.append("declared but untouched: " + ", ".join(missing))
+        hit = sorted(p for p in touched if any(p == q or p.startswith(q + "/") for q in step.protect))
+        if hit:
+            attempt.blocking.append("protected files modified: " + ", ".join(hit))
+        if step.expect_red and verify is not None and verify.ok:
+            attempt.blocking.append("verification passed, but this step must leave it failing: the new tests do not fail before the implementation, so they do not test it")
+        for command in self.cfg.gates:
+            g = self.ws.run_gate(command)
+            attempt.gates.append({"command": g.command, "ran": g.ran, "ok": g.ok})
+            self.log(f"    gate `{command}`: {'pass' if g.ok else ('FAIL' if g.ran else 'could not run')}")
+            if not g.ran:
+                attempt.notes.append(f"gate could not run (fix the command; this is not a pass): `{command}`: {g.output}")
+            elif not g.ok:
+                attempt.blocking.append(f"gate failed: `{command}`\n{g.output[-1500:]}")
+
+    def commit_step(self, run_id: int, step: Step, attempt: Attempt, author: str, reviewer: str) -> str | None:
+        """Commit the step's files with provenance trailers. Returns the sha, or None when not committing."""
+        if not self.cfg.commit or not self.is_repo or not attempt.touched:
+            return None
+        message = (
+            f"{step.title}\n\n{step.description.strip()}\n\n"
+            f"Bicameral-Run: {run_id}\nBicameral-Step: {step.id}\nBicameral-Author: {author}\nBicameral-Reviewer: {reviewer}\n"
+        )
+        try:
+            sha = gitops.commit_paths(self.ws.root, list(attempt.touched), message)
+        except gitops.GitError as e:
+            self.log(f"    commit failed: {e}")
+            attempt.notes.append(f"commit failed: {e}")
+            return None
+        self.log(f"    committed {sha[:10]}")
+        return sha
+
+    def review_diff(self, model: str, unified: str, context: str = "") -> tuple[DiffReview, float]:
+        """Independent review of an arbitrary diff, with every finding grounded against the diff's hunks."""
+        user = prompts.build_diff_review_prompt(unified[:60000], context)
+        data, cost = self.call(model, prompts.DIFF_REVIEW_SYSTEM, user, FINDINGS_SCHEMA, "review_diff", self.effort_for(model))
+        return DiffReview.from_dict(data).ground(gitops.hunk_ranges(unified)), cost
 
     # -- memory ----------------------------------------------------------------
 
