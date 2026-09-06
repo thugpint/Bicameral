@@ -17,6 +17,7 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22d3ee?style=flat-square&logo=python&logoColor=white">
   <img alt="Works with Claude Code" src="https://img.shields.io/badge/works%20with-Claude%20Code-f472b6?style=flat-square">
   <img alt="Works with Codex CLI" src="https://img.shields.io/badge/works%20with-Codex%20CLI-34d399?style=flat-square">
+  <a href="https://github.com/Devilz06/Bicameral/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Devilz06/Bicameral/tests.yml?branch=main&style=flat-square&label=tests"></a>
 </p>
 
 <p align="center">
@@ -39,6 +40,8 @@ Bicameral turns [Claude Code](https://claude.com/claude-code) into a two-model s
 Claude Code becomes the **Architect**: it investigates the repo, writes a small plan, and reviews every diff. A second model, the **Editor**, writes the code — any model on your ChatGPT plan (via the Codex CLI), a second Claude through headless Claude Code, or any model your Anthropic / OpenAI API key can see. A local [MCP](https://modelcontextprotocol.io) server sits between them: it routes each step, runs your tests, rolls back what fails review, and keeps a record of which model is good at what.
 
 No API keys required. Your existing Claude and ChatGPT subscriptions are enough.
+
+**Status:** early alpha. It works end to end, but interfaces, the MCP tool names and the on-disk record format may change before 1.0. Pin a [release tag](https://github.com/Devilz06/Bicameral/releases) if you need stability.
 
 ## Features
 
@@ -407,7 +410,7 @@ python -m venv .venv
 .venv/Scripts/python -m pytest -q
 ```
 
-The 88 tests run fully offline against scripted fake backends (`tests/fake.py`) and a throwaway git repository; no account or API key is needed.
+The 88 tests run fully offline against scripted fake backends (`tests/fake.py`) and a throwaway git repository; no account or API key is needed. CI runs them with ruff on Linux and Windows against Python 3.11 and 3.12.
 
 Style: 120-column lines, type hints, dataclasses, standard library first. Ruff is configured in `pyproject.toml`; run `ruff check src tests` if you have it. Keep changes surgical and match the surrounding code. The layout table above says where each part lives. Issues and pull requests are welcome.
 
