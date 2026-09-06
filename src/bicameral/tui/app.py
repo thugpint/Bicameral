@@ -292,7 +292,7 @@ class BicameralApp(App):
             t = self.query_one(f"#{tid}", DataTable)
             t.clear()
             for r in store.runs(limit=limit):
-                outcome = "[#34d399]ok[/]" if r["success"] else ("[#fb7185]fail[/]" if r["success"] == 0 else "[#8f89b3]…[/]")
+                outcome = "[#34d399]ok[/]" if r["success"] else ("[#fb7185]fail[/]" if r["success"] == 0 else ("[#8f89b3]interrupted[/]" if r["summary"] == "interrupted" else "[#8f89b3]…[/]"))
                 when = _when(r["created_at"])
                 cost = f"${(r['cost_usd'] or 0):.3f}"
                 if wide:

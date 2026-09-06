@@ -70,3 +70,12 @@ def test_examples_prefer_same_kind(store):
     got = ex.retrieve("median even lists", "bugfix", k=1)
     assert got and got[0].kind == "bugfix"
     assert ex.retrieve("totally unrelated words", "docs") == []
+
+
+def test_router_honours_a_pinned_step(store):
+    r = Router(store, learning=True, rng=random.Random(2))
+    for _ in range(15):
+        r.record("docs", "small-model", False)
+        r.record("docs", "big-model", True)
+    c = r.choose("docs", CANDS, "editor", pinned=True)
+    assert c.model == "small-model" and "pinned" in c.reason

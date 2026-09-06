@@ -118,6 +118,16 @@ class Store:
         self.conn.execute(f"INSERT INTO steps ({cols}) VALUES ({marks})", list(fields.values()))
         self.conn.commit()
 
+    def mark_interrupted(self, active_ids: list[int]) -> int:
+        """Runs still open that no live session owns were cut off (Claude Code stopped, server restarted)."""
+        marks = ",".join("?" for _ in active_ids) or "NULL"
+        cur = self.conn.execute(
+            f"UPDATE runs SET summary = 'interrupted' WHERE success IS NULL AND summary IS NULL AND id NOT IN ({marks})",
+            list(active_ids),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
     def runs(self, limit: int = 50) -> list[sqlite3.Row]:
         return list(self.conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,)))
 

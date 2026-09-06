@@ -11,7 +11,7 @@ from bicameral.mcp_server import ARCHITECT_ID, Bicameral, LessonInput, StepInput
 from bicameral.providers import LLM, AgentEditResult
 from bicameral.router import Router
 from bicameral.store import Store
-from fake import EDITOR, FakeProvider, edits
+from fake import EDITOR, FakeProvider, critique, edits, lessons, reject
 from test_orchestrator import BUGGY, FIXED, VERIFY
 
 STEP = StepInput(id=1, title="Fix median for even-length input", description="average the two middle values",
@@ -172,5 +172,72 @@ def test_mcp_server_exposes_tools():
 
     tools = asyncio.run(server.list_tools())
     names = {t.name for t in tools}
-    assert {"bicameral_status", "bicameral_recall", "bicameral_begin", "bicameral_execute",
+    assert {"bicameral_status", "bicameral_recall", "bicameral_critique", "bicameral_begin", "bicameral_execute",
             "bicameral_check", "bicameral_review", "bicameral_finish", "bicameral_stats"} <= names
+
+
+MINE = StepInput(id=1, title="Fix median for even-length input", description="average the two middle values",
+                 kind="bugfix", files=["stats.py"], acceptance="test_median_even passes", suggested_role="architect")
+
+
+def test_critique_asks_the_editor_before_begin(median_repo):
+    app, fp, store = make({"critique": [critique((1, "step does not say which test fails", "name test_median_even"))]})
+    out = app.critique("fix median", str(median_repo), EDITOR, "bugfix", "s", [STEP], VERIFY)
+    assert "1 concern(s)" in out and "which test fails" in out and "bicameral_begin" in out
+    assert fp.calls_for("critique")[0][1] == EDITOR
+    assert "stats.py" in fp.calls_for("critique")[0][2]  # it saw the files the plan touches
+    assert store.runs() == []  # nothing recorded yet
+
+    app2, fp2, _ = make({"critique": [critique(assessment="clear and small")]})
+    assert "no concerns" in app2.critique("fix median", str(median_repo), EDITOR, "bugfix", "s", [STEP], VERIFY)
+    assert "no editor model" in app2.critique("fix median", str(median_repo), "self", "bugfix", "s", [STEP], VERIFY)
+
+
+def test_self_authored_step_gets_editor_second_opinion(median_repo):
+    app, fp, store = make({"review": [reject("even-length branch still wrong")]})
+    run_id = _run_id(app.begin("fix median", str(median_repo), EDITOR, "bugfix", "s", [MINE], VERIFY))
+    assert "routed to YOU" in app.execute(run_id, 1)
+    p = median_repo / "stats.py"
+    p.write_text(p.read_text("utf-8").replace(BUGGY, FIXED), "utf-8")
+    out = app.check(run_id, 1)
+    assert f"Second opinion from {EDITOR}: REJECT: even-length branch still wrong" in out
+    assert "final call" in out
+    assert fp.calls_for("review")[0][1] == EDITOR and "+    mid = len(s) // 2" in fp.calls_for("review")[0][2]
+    assert "accepted (verified)" in app.review(run_id, 1, "accept")  # the architect still decides
+
+
+def test_delegated_step_shows_editor_concerns(median_repo):
+    app, fp, store = make({"edit": [edits([("stats.py", BUGGY, FIXED)], concerns="the acceptance criterion names a test that does not exist")]})
+    run_id = _run_id(app.begin("fix median", str(median_repo), EDITOR, "bugfix", "s", [STEP], VERIFY))
+    out = app.execute(run_id, 1)
+    assert "EDITOR CONCERNS" in out and "does not exist" in out
+    assert "Second opinion" not in out  # the architect reviews delegated steps itself
+
+
+def test_pinned_step_routing_is_reported(median_repo, monkeypatch):
+    monkeypatch.setattr(Router, "SUGGESTION_PRIOR", 0.0)
+    pinned = StepInput(**{**STEP.model_dump(), "pin": True})
+    app, fp, store = make({})
+    out = app.begin("fix median", str(median_repo), EDITOR, "bugfix", "s", [pinned], VERIFY)
+    assert f"delegate to {EDITOR}  (pinned by the architect)" in out
+
+
+def test_orphaned_runs_are_marked_interrupted(median_repo):
+    app, fp, store = make({})
+    stale = store.create_run(task="old", workspace=".", architect_model=ARCHITECT_ID, editor_model="self", learning=1)
+    live = _run_id(app.begin("fix median", str(median_repo), "self", "bugfix", "s", [STEP], VERIFY))
+    app.status()
+    rows = {r["id"]: r for r in store.runs()}
+    assert rows[stale]["summary"] == "interrupted" and rows[stale]["success"] is None
+    assert rows[live]["summary"] is None  # a run this server still owns is left alone
+
+
+def test_finish_stores_editor_lessons_too(median_repo):
+    app, fp, store = make({"edit": [edits([("stats.py", BUGGY, FIXED)])], "reflect": [lessons("ask for the test file up front")]})
+    run_id = _run_id(app.begin("fix median", str(median_repo), EDITOR, "bugfix", "s", [STEP], VERIFY))
+    app.execute(run_id, 1)
+    app.review(run_id, 1, "accept")
+    out = app.finish(run_id, True, [LessonInput(lesson="architect lesson", applies_to=["bugfix"], role="architect")])
+    assert f"lessons from {EDITOR}: ask for the test file up front" in out
+    assert fp.calls_for("reflect")[0][1] == EDITOR
+    assert sorted(l.text for l in store.lessons()) == ["architect lesson", "ask for the test file up front"]

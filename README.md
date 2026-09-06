@@ -17,7 +17,7 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22d3ee?style=flat-square&logo=python&logoColor=white">
   <img alt="Works with Claude Code" src="https://img.shields.io/badge/works%20with-Claude%20Code-f472b6?style=flat-square">
   <img alt="Works with Codex CLI" src="https://img.shields.io/badge/works%20with-Codex%20CLI-34d399?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-61%20passing%20offline-34d399?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-71%20passing%20offline-34d399?style=flat-square">
   <a href="https://github.com/Devilz06/Bicameral/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Devilz06/Bicameral?style=flat-square&color=fbbf24"></a>
 </p>
 
@@ -142,9 +142,11 @@ Type `/bicameral` followed by a task, in a project that has tests if possible:
 Here is what happens, in plain terms:
 
 1. **Claude asks which coder to use.** The list is whatever your sign-ins and keys can actually run: every model on your ChatGPT plan, a second Claude, API models. Pick one, type any other id, or say "Do it all myself". Your last choice is recommended.
-2. **Claude reads your repo and writes a short plan** of 1 to 4 small steps, each with the files to touch and a pass/fail check.
-3. **Each step is written, tested and reviewed.** The coder edits the files, your tests run, and Claude reviews the diff against the step's check. A rejected or failing edit is rolled back and retried with feedback, up to three times.
-4. **You get a short report:** what changed, who wrote each step, how many tries it took, and whether the tests pass. Nothing is committed; you review the working tree and commit when you are happy.
+2. **Claude reads your repo and writes a short plan** of 1 to 4 small steps, each with the files to touch and a pass/fail check. **The coder reads the plan first** and points out anything under-specified or missing; Claude revises.
+3. **Each step is written, tested and reviewed by the other mind.** The coder edits the files, your tests run, and Claude reviews the diff against the step's check. When Claude writes a step itself, the coder reviews that diff before Claude makes the call. A rejected or failing edit is rolled back and retried with feedback, up to three times.
+4. **You get a short report:** what changed, who wrote each step, how many tries it took, what the coder pushed back on, and whether the tests pass. Nothing is committed; the report lists the changed files and you commit when you are happy.
+
+Say who should do what and it sticks: "let Codex write the tests" pins those steps to the coder, so the router's exploration never swaps authors.
 
 Good tasks are small and concrete. "Fix the failing test in `test_parser.py`" beats "improve the parser".
 
@@ -219,10 +221,14 @@ flowchart LR
         E[Codex CLI / headless Claude<br/>writes the diff]
     end
 
+    A -- draft plan --> E
+    E -- critique --> A
     A -- plan: 1-4 small steps --> R
     R -- delegate --> E
     R -- keep --> A
     E -- diff --> V
+    A -- own diff --> E
+    E -- second opinion --> A
     V -- diff + test output --> A
     A -- accept / reject --> M
     M -- lessons, examples, track record --> A
@@ -232,9 +238,9 @@ One run of `/bicameral`, step by step:
 
 1. **Status and model choice.** Claude checks which Editor backends are signed in and asks which one to use. Your last choice is recommended.
 2. **Recall.** Lessons from past runs, similar accepted diffs, and the routing track record are pulled into context *before* planning.
-3. **Plan.** Claude reads the repo and registers 1–4 small steps, each with the files to touch, an acceptance criterion, a suggested role, and the test command.
-4. **Route, edit, verify, review.** For every step the server decides who executes it. The Editor's diff comes back with the test output. Claude reviews it against the acceptance criterion and accepts or rejects. Rejections roll back the files and retry with feedback, up to three times. Acceptance is refused while required tests fail.
-5. **Finish and reflect.** Final verification, outcome logging, and 0–3 transferable lessons written by the Architect for next time.
+3. **Plan, then critique.** Claude reads the repo and drafts 1–4 small steps, each with the files to touch, an acceptance criterion, a suggested role, and the test command. The Editor reads the draft and the files it touches and returns concrete concerns; Claude revises, then registers the plan. Steps the user assigned by name are pinned and never rerouted.
+4. **Route, edit, verify, cross-review.** For every step the server decides who executes it. The Editor's diff comes back with the test output and any concerns the Editor has about the step; Claude reviews it against the acceptance criterion. When the step stays with Claude, the Editor reviews Claude's diff first and Claude gets that second opinion before deciding. Rejections roll back the files and retry with feedback, up to three times. Acceptance is refused while required tests fail.
+5. **Finish and reflect.** Final verification, outcome logging, and 0–3 transferable lessons from each mind (duplicates merged). The report lists the uncommitted files; a run cut off before this point is marked interrupted in History rather than left hanging.
 
 ## 🥊 Why it is different
 
@@ -245,6 +251,7 @@ Plenty of tools split "planner" and "coder". Bicameral is about the loop around 
 | Runs inside Claude Code as a skill | ✅ `/bicameral` | usually a separate CLI |
 | Uses your subscriptions, no API key | ✅ Claude + ChatGPT sign-in | API keys |
 | Reviewer gate with test verification | ✅ every step, auto-rollback | prompt-only review, if any |
+| The coder talks back | ✅ critiques the plan, reviews the planner's own diffs, flags concerns | executes silently |
 | Decides who executes each step | ✅ learned bandit over (step kind, model) | fixed roles |
 | Learns from outcomes | ✅ scored lessons, retrieved examples | no memory, or unscored notes |
 | Baseline mode to measure the learning | ✅ `--baseline` and an eval harness | ❌ |
@@ -252,8 +259,9 @@ Plenty of tools split "planner" and "coder". Bicameral is about the loop around 
 The pieces, in one paragraph each:
 
 - **Learned routing.** A Thompson-sampling bandit over (step kind, model) decides whether a step goes to the Editor or stays with the Architect. It starts from the Architect's suggestion and overrides it once the track record says so. It explores on purpose; that is what makes routing learnable.
-- **Reviewer gate.** Every diff is reviewed by the Architect against the step's acceptance criterion *and* your test command. Nothing is ever left applied without a review; rejected or failing edits are rolled back to a snapshot and retried with the feedback.
-- **Reflective memory.** After each run the Architect writes 0–3 transferable lessons. They are retrieved by relevance for later tasks and scored by whether the runs they were used in succeeded. Losers get pruned.
+- **Reviewer gate.** Every diff is reviewed against the step's acceptance criterion *and* your test command, by the model that did not write it. Nothing is ever left applied without a review; rejected or failing edits are rolled back to a snapshot and retried with the feedback.
+- **Two voices.** The Editor critiques the plan before the first edit, can attach concerns to any diff it produces, and gives a second opinion on the Architect's own diffs. The Architect still decides, but it decides with the other mind's objection in front of it.
+- **Reflective memory.** After each run both models write 0–3 transferable lessons. They are retrieved by relevance for later tasks and scored by whether the runs they were used in succeeded. Losers get pruned.
 - **Retrieved examples.** Diffs that passed both review and verification are shown to the Editor as few-shot examples on similar steps.
 - **Hard evaluation.** Fixture repos with failing tests, pass/fail per task, and a learning-off baseline, so "self-improving" is a number, not a vibe.
 
@@ -295,7 +303,7 @@ Inside Claude Code the Architect is always the host session (recorded as `claude
 
 ```text
 src/bicameral/
-  mcp_server.py     the tools Claude Code calls: status, recall, begin, execute, check, review, finish, stats
+  mcp_server.py     the tools Claude Code calls: status, recall, critique, begin, execute, check, review, finish, stats
   skill/SKILL.md    the /bicameral skill: the Architect protocol
   engine.py         plan / route / edit / verify / review / rollback / record / reflect, shared by both loops
   orchestrator.py   standalone loop (CLI, evals, GUI "Run a task")
@@ -308,7 +316,7 @@ src/bicameral/
   tui/              the Textual terminal dashboard
   evals/            harness and bundled fixture tasks
   __main__.py       `python -m bicameral` == `bicameral`
-tests/              61 offline tests with scripted fake backends
+tests/              71 offline tests with scripted fake backends
 ```
 
 ## ❓ FAQ
@@ -326,7 +334,10 @@ The hosted flow is a Claude Code skill. The standalone loop (`bicameral run`, th
 Every edit is snapshotted first, reviewed by the Architect, and rolled back on rejection or at the end of a run if unreviewed. It never runs `git commit`.
 
 **Why does Claude sometimes do a step itself when I picked Codex?**
-The router explores. On a fresh install it follows Claude's suggestion about four times out of five and tries the other model the rest of the time, so it can learn who is better at what. The Learning tab shows the track record it builds.
+The router explores. On a fresh install it follows Claude's suggestion about four times out of five and tries the other model the rest of the time, so it can learn who is better at what. The Learning tab shows the track record it builds. If a step must be done by a particular model, say so in the task ("Codex writes the tests"); Claude pins it and the router leaves it alone.
+
+**Can I pick the planner model too?**
+Inside Claude Code the planner is the session you are in, so switch it with `/model` before running `/bicameral`. Outside Claude Code, `bicameral run --architect ... --editor ...` takes any two models.
 
 **Why "Bicameral"?**
 Two chambers, one decision. One mind plans and judges, the other executes, and the bridge between them keeps score.

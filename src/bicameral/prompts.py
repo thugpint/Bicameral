@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .memory import Example
-from .schemas import Lesson, Step
+from .schemas import Lesson, Plan, Step
 
 ARCHITECT_SYSTEM = """You are the Architect in a two-model coding system.
 
@@ -27,17 +27,28 @@ Output edits as search/replace pairs:
 - Make the smallest change that satisfies the step's acceptance criterion. Do not refactor, reformat or "improve" unrelated code.
 - If a file you need is missing from the context, set status "need_files" and list the paths.
 - If the step is impossible or unsafe as specified, set status "blocked" and explain.
+- If you disagree with how the step is specified but can still do it, do it and say why in "concerns" (one or two sentences; empty string when you have none). The Architect reads it.
 
 If reviewer feedback or a failing verification is included, fix exactly what it points at."""
 
-REVIEWER_SYSTEM = """You are the Reviewer in a two-model coding system. The Editor produced a diff for one planned step; decide whether to accept it.
+CRITIC_SYSTEM = """You are the Editor in a two-model coding system. The Architect has drafted a plan and asks for your read of it before any file is touched. You will implement the steps it delegates to you, so look for what would make you fail:
+
+- a step that is under-specified, names the wrong file, or assumes code that does not exist,
+- a step whose acceptance criterion cannot be checked on a diff,
+- steps that overlap or depend on each other in the wrong order,
+- something the plan misses that the task clearly needs,
+- a verification command that will not exercise the change.
+
+Be concrete and short. Empty concerns means the plan is sound as written. Do not restate the plan."""
+
+REVIEWER_SYSTEM = """You are the Reviewer in a two-model coding system. The other model produced a diff for one planned step; decide whether to accept it.
 
 Accept only if the diff:
 - satisfies the step's acceptance criterion,
 - is minimal and does not touch unrelated code,
 - introduces no obvious bugs, syntax errors, or broken imports.
 
-If verification output is provided and shows failures caused by this diff, reject. When rejecting, give feedback that is concrete enough for the Editor to act on in one attempt: name the file, the line or symbol, and what should change."""
+If verification output is provided and shows failures caused by this diff, reject. When rejecting, give feedback that is concrete enough for the author to act on in one attempt: name the file, the line or symbol, and what should change."""
 
 REFLECT_SYSTEM = """You are reflecting on a completed run of a two-model coding system (Architect plans and reviews, Editor writes code, a router decides which model executes each step).
 
@@ -63,13 +74,28 @@ def _files_block(files: dict[str, str]) -> str:
     return "## File contents\n" + "\n\n".join(parts) + "\n\n"
 
 
-def build_plan_prompt(task: str, overview: str, files: dict[str, str], lessons: list[Lesson]) -> str:
+def build_plan_prompt(task: str, overview: str, files: dict[str, str], lessons: list[Lesson], critique: str = "") -> str:
     return (
         f"## Task\n{task}\n\n"
         f"{_lessons_block(lessons)}"
         f"## Repository overview\n{overview}\n\n"
         f"{_files_block(files)}"
-        "Produce the plan as JSON matching the schema."
+        + (f"## The Editor's critique of your previous plan\n{critique}\n\nRevise the plan where the critique is right; keep what is not.\n\n" if critique else "")
+        + "Produce the plan as JSON matching the schema."
+    )
+
+
+def build_critique_prompt(task: str, plan: Plan, verify: str, overview: str, files: dict[str, str]) -> str:
+    steps = "\n".join(
+        f"{s.id}. {s.title} [{s.kind}; {s.suggested_role}{'; pinned' if s.pin else ''}] files: {', '.join(s.files) or '-'}\n"
+        f"   {s.description}\n   Acceptance: {s.acceptance}"
+        for s in plan.steps
+    )
+    return (
+        f"## Task\n{task}\n\n## Plan\n{plan.summary}\n\n{steps}\n\nVerification: {verify or '(none)'}\n\n"
+        f"## Repository overview\n{overview}\n\n"
+        f"{_files_block(files)}"
+        "Return your critique as JSON matching the schema."
     )
 
 
@@ -105,7 +131,7 @@ Rules:
 - Do not run the test suite, install packages, create commits, or touch files outside the repository.
 - Do not create scratch files, notes, or backups.
 - If reviewer feedback or a failing verification is included, fix exactly what it points at.
-- When you are done, reply with a short summary of what you changed and why (no code)."""
+- When you are done, reply with a short summary of what you changed and why (no code). If you disagree with how the step was specified, add a line starting with "Concerns:"; the Architect reads it."""
 
 
 def build_agent_edit_prompt(step: Step, plan_summary: str, examples: list[Example], lessons: list[Lesson], feedback: str) -> str:

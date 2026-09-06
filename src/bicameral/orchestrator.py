@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from .engine import Attempt, Engine, OrchestratorError, RunConfig
+from .engine import Attempt, Engine, OrchestratorError, RunConfig, dedupe_lessons
 from .providers import LLM, ProviderError
 from .schemas import Plan, Step
 from .store import Store
@@ -93,9 +93,12 @@ class Orchestrator:
             res = eng.verify(verify)
             verify_output = res.output if res else None
             verify_ok = res.ok if res else True
-            review, rc = eng.review(step, last.diff, verify_output)
+            if last.concerns:
+                self.log(f"    editor concerns: {last.concerns[:200]}")
+            reviewer = eng.reviewer_for(choice.model)
+            review, rc = eng.review(step, last.diff, verify_output, reviewer=reviewer)
             cost += rc
-            self.log(f"    review: {review.verdict}" + (f" - {review.feedback[:200]}" if review.verdict == "reject" else ""))
+            self.log(f"    review by {reviewer}: {review.verdict}" + (f" - {review.feedback[:200]}" if review.verdict == "reject" else ""))
 
             if review.verdict == "reject":
                 eng.rollback(last)
@@ -134,6 +137,17 @@ class Orchestrator:
             raise
 
         verify = eng.resolve_verify(plan.verify_command)
+        if eng.two_models:
+            try:
+                critique, _ = eng.critique(task, plan, verify)
+                if critique.concerns:
+                    self.log(f"editor critique: {critique.as_text()[:600]}")
+                    plan = eng.plan(task, lessons, critique=critique.as_text())
+                    verify = eng.resolve_verify(plan.verify_command)
+                else:
+                    self.log("editor critique: no concerns")
+            except (ProviderError, OrchestratorError) as e:
+                self.log(f"critique skipped: {e}")
         self.log(f"plan [{plan.task_kind}]: {plan.summary}")
         for i, s in enumerate(plan.steps):
             self.log(f"  {i + 1}. {s.title} ({s.kind}, suggested: {s.suggested_role}) files: {', '.join(s.files) or '-'}")
@@ -179,7 +193,10 @@ class Orchestrator:
         if cfg.learning:
             eng.credit_lessons(lesson_ids, success)
             try:
-                new_lessons = eng.reflect(run_log(task, plan, results, success, failure_reason))
+                log_text = run_log(task, plan, results, success, failure_reason)
+                new_lessons = eng.reflect(log_text)
+                if eng.two_models:
+                    new_lessons = dedupe_lessons(new_lessons + eng.reflect(log_text, model=cfg.editor_model))
                 eng.remember(new_lessons, run_id)
                 lessons_learned = [l.text for l in new_lessons]
                 for text in lessons_learned:

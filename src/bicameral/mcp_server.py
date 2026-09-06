@@ -18,7 +18,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from . import __version__, auth, config, models, paths
-from .engine import Attempt, Engine, RunConfig, lessons_from_dicts
+from .engine import Attempt, Engine, RunConfig, dedupe_lessons, lessons_from_dicts
 from .orchestrator import StepResult, run_log
 from .providers import LLM, ProviderError, build_providers
 from .router import Choice
@@ -30,8 +30,9 @@ ARCHITECT_ID = "claude-code"  # the host session; billed to the user's account, 
 
 INSTRUCTIONS = (
     "Bicameral: two-model coding loop. You (the host) are the Architect. Call bicameral_status, then "
-    "bicameral_recall, plan, bicameral_begin, and for each step bicameral_execute -> (bicameral_check if you edited "
-    "yourself) -> bicameral_review; finish with bicameral_finish. The /bicameral skill has the full protocol."
+    "bicameral_recall, plan, bicameral_critique (the Editor's read of your plan), bicameral_begin, and for each step "
+    "bicameral_execute -> (bicameral_check if you edited yourself) -> bicameral_review; finish with bicameral_finish. "
+    "The /bicameral skill has the full protocol."
 )
 
 
@@ -43,6 +44,7 @@ class StepInput(BaseModel):
     files: list[str] = Field(default_factory=list, description="Repo-relative paths this step will touch")
     acceptance: str = Field(description="Concrete criterion the reviewer can check")
     suggested_role: str = Field(default="editor", description="'editor' (delegate) or 'architect' (do it yourself)")
+    pin: bool = Field(default=False, description="True when the user named who must do this step; the router will not override suggested_role")
     rationale: str = ""
 
 
@@ -64,6 +66,7 @@ class Session:
     verify: str | None
     baseline_ok: bool | None
     lesson_ids: list[int]
+    two_models: bool = True
     started: float = field(default_factory=time.time)
     routes: dict[int, Choice] = field(default_factory=dict)
     attempts: dict[int, int] = field(default_factory=dict)
@@ -119,6 +122,8 @@ class Bicameral:
             lines.append("- none: sign in to a backend first (see hints above), or route every step to yourself")
         lines.append("Any other id the account supports works too: prefix it with codex: or claude: for the account backends.")
         lines.append(f"\nLast editor model: {cfg.get('last_editor') or '(none yet)'}")
+        lines.append("The Architect is this session's model; the user changes it with /model, not here.")
+        self.store.mark_interrupted(list(self.sessions))
         runs = self.store.runs(limit=1000)
         done = [r for r in runs if r["success"] is not None]
         if done:
@@ -148,8 +153,8 @@ class Bicameral:
 
     # -- run lifecycle ----------------------------------------------------------
 
-    def begin(self, task: str, workspace: str, editor_model: str, task_kind: str, summary: str,
-              steps: list[StepInput], verify_command: str = "", learning: bool = True) -> str:
+    def _prepare(self, workspace: str, editor_model: str, task_kind: str, summary: str,
+                 steps: list[StepInput], verify_command: str, learning: bool) -> tuple[Workspace, Plan, Engine, RunConfig] | str:
         try:
             ws = Workspace(workspace)
         except NotADirectoryError:
@@ -172,21 +177,48 @@ class Bicameral:
             editor_effort=str(user_cfg.get("editor_effort", "medium")),
         )
         llm = self._llm_factory()
-        self_only = editor_model in ("", "self", ARCHITECT_ID)
-        if not self_only:
+        if editor_model not in ("", "self", ARCHITECT_ID):
             try:
                 llm.provider_for(editor_model)
             except ProviderError as e:
                 return f"error: {e}"
-            config.update(last_editor=editor_model)
+        return ws, plan, Engine(llm, self.store, ws, cfg), cfg
 
-        engine = Engine(llm, self.store, ws, cfg)
+    def critique(self, task: str, workspace: str, editor_model: str, task_kind: str, summary: str,
+                 steps: list[StepInput], verify_command: str = "") -> str:
+        prepared = self._prepare(workspace, editor_model, task_kind, summary, steps, verify_command, True)
+        if isinstance(prepared, str):
+            return prepared
+        ws, plan, engine, cfg = prepared
+        if not engine.two_models:
+            return "no editor model configured, so there is no second mind to ask. Call bicameral_begin."
+        verify = engine.resolve_verify(verify_command)
+        try:
+            critique, _ = engine.critique(task, plan, verify)
+        except ProviderError as e:
+            return f"critique unavailable ({e}). Call bicameral_begin with your plan as it stands."
+        if not critique.concerns:
+            return f"{editor_model} read the plan and has no concerns" + (f": {critique.assessment}" if critique.assessment else ".") + "\nCall bicameral_begin."
+        return (f"{editor_model} read the plan and raised {len(critique.concerns)} concern(s):\n{critique.as_text()}\n\n"
+                "Revise the steps where it is right (you may also disagree), then call bicameral_begin with the final plan.")
+
+    def begin(self, task: str, workspace: str, editor_model: str, task_kind: str, summary: str,
+              steps: list[StepInput], verify_command: str = "", learning: bool = True) -> str:
+        prepared = self._prepare(workspace, editor_model, task_kind, summary, steps, verify_command, learning)
+        if isinstance(prepared, str):
+            return prepared
+        ws, plan, engine, cfg = prepared
+        self_only = not engine.two_models
+        if not self_only:
+            config.update(last_editor=editor_model)
+        self.store.mark_interrupted(list(self.sessions))
         lessons = engine.recall(task)
         run_id = self.store.create_run(task=task, workspace=str(ws.root), architect_model=ARCHITECT_ID,
                                        editor_model=editor_model, learning=int(learning), task_kind=task_kind)
         verify = engine.resolve_verify(verify_command)
         baseline = ws.run(verify).ok if verify else None
-        session = Session(run_id, task, ws, engine, cfg, plan, verify, baseline, [l.id for l in lessons if l.id is not None])
+        session = Session(run_id, task, ws, engine, cfg, plan, verify, baseline, [l.id for l in lessons if l.id is not None],
+                          two_models=not self_only)
         for s in plan.steps:
             if self_only:
                 session.routes[s.id] = Choice(ARCHITECT_ID, "architect", "no editor model configured")
@@ -251,7 +283,7 @@ class Bicameral:
             return (f"step {step_id} attempt {attempt_no}: the editor produced no applicable edit: {attempt.error}\n"
                     f"Call bicameral_execute again (attempts left: {s.cfg.max_attempts - attempt_no}); add feedback if you can sharpen the step.")
         s.pending[step_id] = attempt
-        return self._present(s, step_id, attempt, f"delegated to {choice.model}")
+        return self._present(s, step_id, attempt, f"delegated to {choice.model}", second_opinion=False)
 
     def check(self, run_id: int, step_id: int) -> str:
         s = self.sessions.get(run_id)
@@ -269,9 +301,9 @@ class Bicameral:
 
         attempt = Attempt(True, snapshot=snap, touched=list(changed), diff=unified_diff(snap, changed))
         s.pending[step_id] = attempt
-        return self._present(s, step_id, attempt, "edited by you")
+        return self._present(s, step_id, attempt, "edited by you", second_opinion=True)
 
-    def _present(self, s: Session, step_id: int, attempt: Attempt, who: str) -> str:
+    def _present(self, s: Session, step_id: int, attempt: Attempt, who: str, second_opinion: bool) -> str:
         step = s.step(step_id)
         res = s.engine.verify(s.verify)
         verify_text = "(no verification command)"
@@ -280,11 +312,21 @@ class Bicameral:
             attempt.verify_ok = res.ok
         enforce = s.enforce_verify(step_id)
         diff = attempt.diff if len(attempt.diff) <= 20000 else attempt.diff[:20000] + "\n... (diff truncated)"
+        opinion = ""
+        if second_opinion and s.two_models:
+            # You wrote this one, so the other mind reviews it before you judge your own work.
+            try:
+                review, _ = s.engine.review(step, attempt.diff, res.output if res else None, reviewer=s.cfg.editor_model)
+                opinion = f"\nSecond opinion from {s.cfg.editor_model}: {review.as_text()}\nYou make the final call; weigh it, do not rubber-stamp it.\n"
+            except ProviderError as e:
+                opinion = f"\nSecond opinion unavailable ({e}).\n"
         return (
             f"step {step_id} attempt {s.attempts[step_id]}/{s.cfg.max_attempts} ({who}); files: {', '.join(attempt.touched)}\n"
             + (f"editor summary: {attempt.summary[:600]}\n" if attempt.summary else "")
+            + (f"EDITOR CONCERNS about this step (address or answer them in your review): {attempt.concerns[:800]}\n" if attempt.concerns else "")
             + f"\nAcceptance criterion: {step.acceptance}\n\n```diff\n{diff}\n```\n\nVerification: {verify_text}\n"
             + ("Verification MUST pass for this step to be accepted.\n" if enforce and res is not None else "")
+            + opinion
             + "\nReview the diff against the acceptance criterion, then call bicameral_review(run_id, step_id, verdict, feedback)."
         )
 
@@ -355,8 +397,17 @@ class Bicameral:
             failure = f"final verification `{s.verify}` failed"
 
         new_lessons = lessons_from_dicts([l.model_dump() for l in (lessons or [])])
+        log_text = run_log(s.task, s.plan, results, success, failure)
+        editor_lessons = []
+        if s.two_models and s.cfg.learning:
+            try:
+                editor_lessons = s.engine.reflect(log_text, model=s.cfg.editor_model)
+            except ProviderError:
+                editor_lessons = []
+        known = {" ".join(l.text.lower().split()) for l in new_lessons}
+        editor_lessons = [l for l in dedupe_lessons(editor_lessons) if " ".join(l.text.lower().split()) not in known]
         s.engine.credit_lessons(s.lesson_ids, success)
-        s.engine.remember(new_lessons, s.run_id)
+        s.engine.remember(new_lessons + editor_lessons, s.run_id)
         duration = time.time() - s.started
         self.store.finish_run(
             s.run_id, task_kind=s.plan.task_kind, success=int(success), steps_total=len(s.plan.steps),
@@ -371,7 +422,13 @@ class Bicameral:
         lines.append(f"editor cost: ${s.engine.cost:.4f} ({s.engine.input_tokens}+{s.engine.output_tokens} tok); duration {duration:.0f}s")
         if new_lessons:
             lines.append("lessons stored: " + "; ".join(l.text for l in new_lessons))
-        lines.append("\nRun log for your reflection:\n" + run_log(s.task, s.plan, results, success, failure))
+        if editor_lessons:
+            lines.append(f"lessons from {s.cfg.editor_model}: " + "; ".join(l.text for l in editor_lessons))
+        changed = s.ws.run("git status --short", timeout=30)
+        if changed.ok and changed.output:
+            lines.append("\nUncommitted changes in the working tree:\n```\n" + changed.output[-2000:] + "\n```")
+            lines.append("Nothing was committed. Tell the user these files changed and that `git diff` shows the full change; they commit when happy.")
+        lines.append("\nRun log for your reflection:\n" + log_text)
         return "\n".join(lines)
 
     def stats(self) -> str:
@@ -415,7 +472,15 @@ def build_server():
     def bicameral_recall(task: str) -> str:
         return _app.recall(task)
 
-    @server.tool(description=("Register your plan and start a run. Routes each step to you or to the editor model, "
+    @server.tool(description=("Ask the editor model to critique your draft plan before anything is edited: under-specified steps, "
+                              "wrong files, missing steps, unverifiable acceptance criteria. Same arguments as bicameral_begin. "
+                              "Revise where it is right, then call bicameral_begin."))
+    def bicameral_critique(task: str, workspace: str, editor_model: str, task_kind: str, summary: str,
+                           steps: list[StepInput], verify_command: str = "") -> str:
+        return _app.critique(task, workspace, editor_model, task_kind, summary, steps, verify_command)
+
+    @server.tool(description=("Register your plan and start a run. Routes each step to you or to the editor model "
+                              "(set pin=true on a step to forbid the router from overriding suggested_role), "
                               "runs the baseline verification, and returns the routing. editor_model may be 'self' to do every step yourself."))
     def bicameral_begin(task: str, workspace: str, editor_model: str, task_kind: str, summary: str,
                         steps: list[StepInput], verify_command: str = "", learning: bool = True) -> str:
@@ -426,7 +491,8 @@ def build_server():
     def bicameral_execute(run_id: int, step_id: int, feedback: str = "") -> str:
         return _app.execute(run_id, step_id, feedback)
 
-    @server.tool(description="After editing a step yourself: diff the workspace against the snapshot and run verification.")
+    @server.tool(description=("After editing a step yourself: diff the workspace against the snapshot, run verification, "
+                              "and get the editor model's second opinion on your diff."))
     def bicameral_check(run_id: int, step_id: int) -> str:
         return _app.check(run_id, step_id)
 

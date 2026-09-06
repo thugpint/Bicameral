@@ -20,9 +20,18 @@ class FakeProvider:
         self.scripts = scripts
         self.calls: list[tuple[str, str, str]] = []  # (schema_name, model, user prompt)
 
+    DEFAULTS: dict[str, dict[str, Any]] = {
+        "critique": {"assessment": "sound", "concerns": []},
+        "reflect": {"lessons": []},
+    }
+
     def complete(self, model, system, user, *, json_schema=None, schema_name="response", effort=None, max_tokens=16000):
         self.calls.append((schema_name, model, user))
-        handler = self.scripts[schema_name]
+        handler = self.scripts.get(schema_name)
+        if handler is None:
+            if schema_name not in self.DEFAULTS:
+                raise KeyError(schema_name)
+            return Completion(json.dumps(self.DEFAULTS[schema_name]), 100, 50, 1)
         if callable(handler):
             payload = handler(user)
         else:
@@ -45,16 +54,21 @@ def plan(steps: list[dict[str, Any]], kind: str = "bugfix", verify: str = "", su
     return {"status": "plan", "files_needed": [], "task_kind": kind, "summary": summary, "verify_command": verify, "steps": steps}
 
 
-def step(title: str, files: list[str], kind: str = "bugfix", role: str = "editor", acceptance: str = "tests pass") -> dict[str, Any]:
+def step(title: str, files: list[str], kind: str = "bugfix", role: str = "editor", acceptance: str = "tests pass", pin: bool = False) -> dict[str, Any]:
     return {
         "id": 1, "title": title, "description": title, "kind": kind, "files": files,
-        "acceptance": acceptance, "suggested_role": role, "rationale": "",
+        "acceptance": acceptance, "suggested_role": role, "rationale": "", "pin": pin,
     }
 
 
-def edits(pairs: list[tuple[str, str, str]], new_files: list[tuple[str, str]] | None = None) -> dict[str, Any]:
+def critique(*concerns: tuple[int, str, str], assessment: str = "") -> dict[str, Any]:
+    return {"assessment": assessment, "concerns": [{"step": s, "issue": i, "suggestion": g} for s, i, g in concerns]}
+
+
+def edits(pairs: list[tuple[str, str, str]], new_files: list[tuple[str, str]] | None = None, concerns: str = "") -> dict[str, Any]:
     return {
-        "status": "edits", "files_needed": [], "explanation": "",
+        "status": "edits", "files_needed": [], "concerns": concerns,
+        "explanation": "",
         "edits": [{"path": p, "search": s, "replace": r} for p, s, r in pairs],
         "new_files": [{"path": p, "content": c} for p, c in (new_files or [])],
     }

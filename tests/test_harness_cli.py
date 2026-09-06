@@ -85,9 +85,11 @@ def test_parse_json_tolerates_fences_and_prose():
     assert parse_json('Sure! {"a": [1, 2]} hope that helps') == {"a": [1, 2]}
 
 
-def test_cli_parser_and_offline_commands(capsys):
+def test_cli_parser_and_offline_commands(capsys, monkeypatch):
+    from bicameral import auth
     from bicameral.cli import main
 
+    monkeypatch.setattr(auth, "available_ids", lambda: [])  # no sign-ins: `models` shows the full catalog
     assert main(["status"]) == 0
     out = capsys.readouterr().out
     assert "backends:" in out and "OpenAI API" in out and "Claude Code" in out

@@ -4,7 +4,7 @@ import pytest
 
 from bicameral.orchestrator import Orchestrator, RunConfig
 from bicameral.workspace import Workspace
-from fake import ARCHITECT, EDITOR, accept, edits, fake_llm, lessons, plan, reject, step
+from fake import ARCHITECT, EDITOR, accept, critique, edits, fake_llm, lessons, plan, reject, step
 
 VERIFY = "{python} -m pytest -q"
 BUGGY = "    return s[len(s) // 2]"
@@ -29,7 +29,8 @@ def make(repo, scripts, learning=True, attempts=3):
 def test_happy_path_records_everything(median_repo):
     orch, fp, store = make(
         median_repo,
-        {"plan": [PLAN], "edit": [GOOD_EDIT], "review": [accept()], "reflect": [lessons("keep bugfix steps to one file")]},
+        {"plan": [PLAN], "edit": [GOOD_EDIT], "review": [accept()],
+         "reflect": [lessons("keep bugfix steps to one file"), lessons("Keep bugfix steps to one file")]},  # both minds, same lesson
     )
     result = orch.run("median is wrong for even-length lists")
 
@@ -40,9 +41,12 @@ def test_happy_path_records_everything(median_repo):
     assert result.lessons_learned == ["keep bugfix steps to one file"]
     assert "(s[mid - 1] + s[mid]) / 2" in (median_repo / "stats.py").read_text("utf-8")
 
-    assert [c[0] for c in fp.calls] == ["plan", "edit", "review", "reflect"]
+    # the editor critiques the plan first, and both minds reflect at the end
+    assert [c[0] for c in fp.calls] == ["plan", "critique", "edit", "review", "reflect", "reflect"]
     assert fp.calls_for("plan")[0][1] == ARCHITECT
-    assert fp.calls_for("review")[0][1] == ARCHITECT
+    assert fp.calls_for("critique")[0][1] == EDITOR
+    assert fp.calls_for("review")[0][1] == (EDITOR if chosen == ARCHITECT else ARCHITECT)  # whoever did not write it
+    assert [c[1] for c in fp.calls_for("reflect")] == [ARCHITECT, EDITOR]
     assert "stats.py" in fp.calls_for("edit")[0][2]  # file contents were provided
     assert "+    mid = len(s) // 2" in fp.calls_for("review")[0][2]  # reviewer saw the diff
 
@@ -102,7 +106,7 @@ def test_learning_off_skips_memory_examples_and_reflection(median_repo):
     orch, fp, store = make(median_repo, {"plan": [PLAN], "edit": [GOOD_EDIT], "review": [accept()]}, learning=False)
     result = orch.run("fix median")
     assert result.success
-    assert [c[0] for c in fp.calls] == ["plan", "edit", "review"]
+    assert [c[0] for c in fp.calls] == ["plan", "critique", "edit", "review"]
     assert store.lessons() == [] and store.examples() == []
 
 
@@ -157,3 +161,43 @@ def test_empty_plan_raises(median_repo):
     with pytest.raises(OrchestratorError):
         orch.run("fix median")
     assert store.runs()[0]["success"] == 0
+
+
+def test_editor_critique_triggers_one_replan(median_repo):
+    vague = plan([step("Fix it", ["stats.py"])], verify=VERIFY, summary="vague")
+    orch, fp, _ = make(
+        median_repo,
+        {"plan": [vague, PLAN], "critique": [critique((1, "does not name the failing test", "mention test_median_even"))],
+         "edit": [GOOD_EDIT], "review": [accept()]},
+        learning=False,
+    )
+    assert orch.run("fix median").success
+    plans = fp.calls_for("plan")
+    assert len(plans) == 2
+    assert "critique of your previous plan" in plans[1][2] and "does not name the failing test" in plans[1][2]
+    assert fp.calls_for("critique")[0][1] == EDITOR
+
+
+def test_architect_authored_step_is_reviewed_by_editor(median_repo, monkeypatch):
+    from bicameral.router import Router
+
+    monkeypatch.setattr(Router, "SUGGESTION_PRIOR", 1000.0)
+    mine = plan([step("Fix median", ["stats.py"], role="architect")], verify=VERIFY)
+    orch, fp, _ = make(median_repo, {"plan": [mine], "edit": [GOOD_EDIT], "review": [accept()]}, learning=False)
+    result = orch.run("fix median")
+    assert result.success and result.steps[0].role == "architect"
+    assert fp.calls_for("edit")[0][1] == ARCHITECT
+    assert fp.calls_for("review")[0][1] == EDITOR
+
+
+def test_pinned_step_is_never_rerouted(median_repo, monkeypatch):
+    from bicameral.router import Router
+
+    monkeypatch.setattr(Router, "SUGGESTION_PRIOR", 0.0)  # maximal exploration
+    pinned = plan([step("Fix median", ["stats.py"], role="editor", pin=True)], verify=VERIFY)
+    for _ in range(5):
+        orch, fp, _ = make(median_repo, {"plan": [pinned], "edit": [GOOD_EDIT], "review": [accept()]}, learning=False)
+        result = orch.run("fix median")
+        assert result.success and result.steps[0].model == EDITOR
+        p = median_repo / "stats.py"
+        p.write_text(p.read_text("utf-8").replace(FIXED, BUGGY), "utf-8")

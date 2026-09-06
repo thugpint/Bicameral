@@ -521,7 +521,7 @@ function renderHistory() {
   const h = $('history');
   if (!S.runs.length) { h.innerHTML = '<div class="empty">Nothing yet. Run <code>/bicameral</code> in Claude Code, or use the Run tab.</div>'; return; }
   h.innerHTML = '<table><tr><th>When</th><th>Result</th><th>Task</th><th>Coder</th><th>Steps</th><th>Cost</th></tr>' + S.runs.map(r => {
-    const tag = r.success === 1 ? '<span class="tag ok">ok</span>' : r.success === 0 ? '<span class="tag bad">failed</span>' : '<span class="tag">running</span>';
+    const tag = r.success === 1 ? '<span class="tag ok">ok</span>' : r.success === 0 ? '<span class="tag bad">failed</span>' : r.summary === 'interrupted' ? '<span class="tag">interrupted</span>' : '<span class="tag">running</span>';
     return `<tr class="row" onclick="toggleRun(${r.id}, this)"><td class="help">${esc(r.when)}</td><td>${tag}</td><td>${esc(r.task.slice(0, 90))}${r.kind ? ` <span class="tag">${esc(r.kind)}</span>` : ''}</td><td class="mono">${esc(r.editor)}</td><td>${r.steps_ok}/${r.steps_total}</td><td class="help">$${r.cost.toFixed(3)}</td></tr><tr id="d-${r.id}" hidden><td colspan="6"></td></tr>`;
   }).join('') + '</table>';
 }

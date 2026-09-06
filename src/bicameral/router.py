@@ -29,13 +29,18 @@ class Router:
         self.learning = learning
         self.rng = rng or random.Random()
 
-    def choose(self, kind: str, candidates: dict[str, str], suggested_role: str) -> Choice:
-        """candidates maps role -> model id (e.g. {"architect": "...", "editor": "..."})."""
+    def choose(self, kind: str, candidates: dict[str, str], suggested_role: str, pinned: bool = False) -> Choice:
+        """candidates maps role -> model id (e.g. {"architect": "...", "editor": "..."}).
+
+        A pinned step goes to the suggested role, no exploration: the user said who does it.
+        """
         if suggested_role not in candidates:
             suggested_role = "editor" if "editor" in candidates else next(iter(candidates))
         if len(set(candidates.values())) == 1:
             role = suggested_role
             return Choice(candidates[role], role, "single model configured")
+        if pinned:
+            return Choice(candidates[suggested_role], suggested_role, "pinned by the architect")
         if not self.learning:
             return Choice(candidates[suggested_role], suggested_role, "architect suggestion (learning off)")
 

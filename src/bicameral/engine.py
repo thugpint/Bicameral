@@ -16,11 +16,13 @@ from .memory import Example, Examples, Memory
 from .providers import LLM, ProviderError
 from .router import Choice, Router
 from .schemas import (
+    CRITIQUE_SCHEMA,
     EDIT_SCHEMA,
     PLAN_SCHEMA,
     REFLECT_SCHEMA,
     REVIEW_SCHEMA,
     TASK_KINDS,
+    Critique,
     EditResult,
     Lesson,
     Plan,
@@ -61,6 +63,7 @@ class Attempt:
     touched: list[str] = field(default_factory=list)
     diff: str = ""
     summary: str = ""
+    concerns: str = ""  # the editor's disagreement with the step, if any
     cost_usd: float = 0.0
     verify_ok: bool | None = None  # filled in once verification has run on this attempt
 
@@ -97,6 +100,16 @@ class Engine:
     def effort_for(self, model: str) -> str:
         return self.cfg.architect_effort if model == self.cfg.architect_model else self.cfg.editor_effort
 
+    @property
+    def two_models(self) -> bool:
+        return bool(self.cfg.editor_model) and self.cfg.editor_model not in ("self", self.cfg.architect_model)
+
+    def reviewer_for(self, author: str) -> str:
+        """The model that did not write the diff reviews it; with one model there is no choice."""
+        if self.two_models and author == self.cfg.architect_model:
+            return self.cfg.editor_model
+        return self.cfg.architect_model
+
     # -- memory ----------------------------------------------------------------
 
     def recall(self, task: str, k: int = 5) -> list[Lesson]:
@@ -107,12 +120,12 @@ class Engine:
 
     # -- planning --------------------------------------------------------------
 
-    def plan(self, task: str, lessons: list[Lesson]) -> Plan:
+    def plan(self, task: str, lessons: list[Lesson], critique: str = "") -> Plan:
         overview = self.ws.overview()
         files: dict[str, str] = {}
         data: dict[str, Any] = {}
         for _ in range(self.cfg.max_file_rounds + 1):
-            user = prompts.build_plan_prompt(task, overview, files, lessons)
+            user = prompts.build_plan_prompt(task, overview, files, lessons, critique)
             data, _ = self.call(self.cfg.architect_model, prompts.ARCHITECT_SYSTEM, user, PLAN_SCHEMA, "plan", self.cfg.architect_effort)
             wanted = [f for f in data.get("files_needed", []) if f and f not in files]
             if data.get("status") == "need_files" and wanted:
@@ -125,9 +138,16 @@ class Engine:
             raise OrchestratorError("architect produced a plan with no steps")
         return plan
 
+    def critique(self, task: str, plan: Plan, verify: str | None) -> tuple[Critique, float]:
+        """The Editor reads the plan before anything is edited. Only meaningful with two models."""
+        files = self.ws.read_many(sorted({f for s in plan.steps for f in s.files})[:8], max_chars_per_file=6000)
+        user = prompts.build_critique_prompt(task, plan, verify or "", self.ws.overview(), files)
+        data, cost = self.call(self.cfg.editor_model, prompts.CRITIC_SYSTEM, user, CRITIQUE_SCHEMA, "critique", self.cfg.editor_effort)
+        return Critique.from_dict(data), cost
+
     def route(self, step: Step) -> Choice:
         candidates = {"architect": self.cfg.architect_model, "editor": self.cfg.editor_model}
-        return self.router.choose(step.kind, candidates, step.suggested_role)
+        return self.router.choose(step.kind, candidates, step.suggested_role, pinned=step.pin)
 
     # -- editing ---------------------------------------------------------------
 
@@ -146,7 +166,11 @@ class Engine:
             return Attempt(False, "the editor agent finished without changing any file: " + res.summary[:400], summary=res.summary, cost_usd=cost)
         snap: dict[str, str | None] = {p: before.get(p) for p in changed}
         diff = unified_diff(snap, changed)
-        return Attempt(True, snapshot=snap, touched=list(changed), diff=diff, summary=res.summary, cost_usd=cost)
+        concerns = ""
+        marker = res.summary.lower().find("concerns:")
+        if marker >= 0:
+            concerns = res.summary[marker + len("concerns:"):].strip()
+        return Attempt(True, snapshot=snap, touched=list(changed), diff=diff, summary=res.summary, concerns=concerns, cost_usd=cost)
 
     def _edit_search_replace(self, model: str, step: Step, plan_summary: str, examples: list[Example], lessons: list[Lesson], feedback: str) -> Attempt:
         effort = self.effort_for(model)
@@ -180,7 +204,7 @@ class Engine:
             self.ws.restore(snap)
             return Attempt(False, f"Your edits could not be applied: {e}", cost_usd=cost)
         diff = unified_diff(snap, self.ws.current(touched))
-        return Attempt(True, snapshot=snap, touched=touched, diff=diff, summary=result.explanation, cost_usd=cost)
+        return Attempt(True, snapshot=snap, touched=touched, diff=diff, summary=result.explanation, concerns=result.concerns, cost_usd=cost)
 
     def rollback(self, attempt: Attempt) -> None:
         if attempt.snapshot:
@@ -200,9 +224,10 @@ class Engine:
             return self.cfg.verify_command or None
         return plan_verify or self.ws.detect_test_command()
 
-    def review(self, step: Step, diff: str, verify_output: str | None) -> tuple[Review, float]:
+    def review(self, step: Step, diff: str, verify_output: str | None, reviewer: str | None = None) -> tuple[Review, float]:
+        model = reviewer or self.cfg.architect_model
         user = prompts.build_review_prompt(step, diff, verify_output)
-        data, cost = self.call(self.cfg.architect_model, prompts.REVIEWER_SYSTEM, user, REVIEW_SCHEMA, "review", self.cfg.architect_effort)
+        data, cost = self.call(model, prompts.REVIEWER_SYSTEM, user, REVIEW_SCHEMA, "review", self.effort_for(model))
         return Review.from_dict(data), cost
 
     # -- outcomes ------------------------------------------------------------------
@@ -217,8 +242,9 @@ class Engine:
 
     # -- reflection ----------------------------------------------------------------
 
-    def reflect(self, run_log: str) -> list[Lesson]:
-        data, _ = self.call(self.cfg.architect_model, prompts.REFLECT_SYSTEM, prompts.build_reflect_prompt(run_log), REFLECT_SCHEMA, "reflect", self.cfg.architect_effort)
+    def reflect(self, run_log: str, model: str | None = None) -> list[Lesson]:
+        model = model or self.cfg.architect_model
+        data, _ = self.call(model, prompts.REFLECT_SYSTEM, prompts.build_reflect_prompt(run_log), REFLECT_SCHEMA, "reflect", self.effort_for(model))
         return lessons_from_dicts(data.get("lessons", []))
 
     def remember(self, lessons: list[Lesson], run_id: int | None) -> list[int]:
@@ -227,6 +253,18 @@ class Engine:
     def credit_lessons(self, lesson_ids: list[int], success: bool) -> None:
         if self.cfg.learning:
             self.memory.feedback(lesson_ids, success)
+
+
+def dedupe_lessons(lessons: list[Lesson]) -> list[Lesson]:
+    """Two minds reflecting on one run often say the same thing; keep the first wording."""
+    seen: set[str] = set()
+    out: list[Lesson] = []
+    for l in lessons:
+        key = " ".join(l.text.lower().split())
+        if key and key not in seen:
+            seen.add(key)
+            out.append(l)
+    return out
 
 
 def lessons_from_dicts(items: list[dict[str, Any]]) -> list[Lesson]:

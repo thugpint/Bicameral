@@ -33,6 +33,7 @@ STEP_SCHEMA = _obj(
         "files": _arr(_STR),
         "acceptance": _STR,
         "suggested_role": {"type": "string", "enum": list(ROLES)},
+        "pin": {"type": "boolean"},
         "rationale": _STR,
     }
 )
@@ -53,8 +54,16 @@ EDIT_SCHEMA = _obj(
         "status": {"type": "string", "enum": ["edits", "need_files", "blocked"]},
         "files_needed": _arr(_STR),
         "explanation": _STR,
+        "concerns": _STR,
         "edits": _arr(_obj({"path": _STR, "search": _STR, "replace": _STR})),
         "new_files": _arr(_obj({"path": _STR, "content": _STR})),
+    }
+)
+
+CRITIQUE_SCHEMA = _obj(
+    {
+        "assessment": _STR,
+        "concerns": _arr(_obj({"step": {"type": "integer"}, "issue": _STR, "suggestion": _STR})),
     }
 )
 
@@ -92,6 +101,7 @@ class Step:
     acceptance: str
     suggested_role: str
     rationale: str = ""
+    pin: bool = False  # the router must honour suggested_role (the user named who does this step)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any], idx: int) -> "Step":
@@ -106,6 +116,7 @@ class Step:
             acceptance=str(d.get("acceptance", "")),
             suggested_role=role,
             rationale=str(d.get("rationale", "")),
+            pin=bool(d.get("pin", False)),
         )
 
 
@@ -147,6 +158,7 @@ class EditResult:
     explanation: str
     edits: list[EditBlock]
     new_files: list[NewFile]
+    concerns: str = ""
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "EditResult":
@@ -155,6 +167,7 @@ class EditResult:
             status=status,
             files_needed=[str(f) for f in d.get("files_needed", []) if f],
             explanation=str(d.get("explanation", "")),
+            concerns=str(d.get("concerns", "")).strip(),
             edits=[
                 EditBlock(str(e.get("path", "")), str(e.get("search", "")), str(e.get("replace", "")))
                 for e in d.get("edits", [])
@@ -173,6 +186,43 @@ class Review:
     def from_dict(cls, d: dict[str, Any]) -> "Review":
         verdict = "accept" if d.get("verdict") == "accept" else "reject"
         return cls(verdict, str(d.get("feedback", "")), [str(i) for i in d.get("issues", [])])
+
+    def as_text(self) -> str:
+        out = self.verdict.upper()
+        if self.feedback:
+            out += f": {self.feedback}"
+        extra = [i for i in self.issues if i and i != self.feedback]
+        if extra:
+            out += "\n  - " + "\n  - ".join(extra)
+        return out
+
+
+@dataclass
+class Critique:
+    """The Editor's read of the Architect's plan before any file is touched."""
+
+    assessment: str
+    concerns: list[tuple[int, str, str]]  # (step id, issue, suggestion)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "Critique":
+        concerns = []
+        for c in d.get("concerns", []):
+            try:
+                step = int(c.get("step", 0))
+            except (TypeError, ValueError):
+                step = 0
+            issue = str(c.get("issue", "")).strip()
+            if issue:
+                concerns.append((step, issue, str(c.get("suggestion", "")).strip()))
+        return cls(str(d.get("assessment", "")).strip(), concerns)
+
+    def as_text(self) -> str:
+        lines = [self.assessment or ("no concerns" if not self.concerns else "")]
+        for step, issue, suggestion in self.concerns:
+            where = f"step {step}: " if step else ""
+            lines.append(f"- {where}{issue}" + (f" -> {suggestion}" if suggestion else ""))
+        return "\n".join(l for l in lines if l)
 
 
 @dataclass
