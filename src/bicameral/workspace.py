@@ -98,6 +98,34 @@ class Workspace:
                 p.parent.mkdir(parents=True, exist_ok=True)
                 p.write_text(content, "utf-8", newline="\n")
 
+    # -- whole-tree snapshots (for backends that edit files themselves) -------
+
+    MAX_SNAPSHOT_FILE_BYTES = 400_000
+
+    def snapshot_tree(self, max_files: int = 4000) -> dict[str, str]:
+        """Contents of every text file in the tree (ignoring build/VCS dirs)."""
+        out: dict[str, str] = {}
+        for rel in self._walk(max_files):
+            if rel.startswith("..."):
+                break
+            p = self.root / rel
+            try:
+                if p.stat().st_size > self.MAX_SNAPSHOT_FILE_BYTES:
+                    continue
+                out[rel] = p.read_text("utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+        return out
+
+    def changed_since(self, before: dict[str, str]) -> dict[str, str | None]:
+        """Paths whose content differs from `before`: new/changed -> content, deleted -> None."""
+        after = self.snapshot_tree()
+        changed: dict[str, str | None] = {}
+        for rel in sorted(set(before) | set(after)):
+            if before.get(rel) != after.get(rel):
+                changed[rel] = after.get(rel)
+        return changed
+
     # -- commands ----------------------------------------------------------
 
     def run(self, command: str, timeout: int = 600, tail_chars: int = 4000) -> CommandResult:

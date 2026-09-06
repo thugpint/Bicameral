@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 
 
 class ProviderError(RuntimeError):
@@ -14,6 +15,18 @@ class Completion:
     input_tokens: int
     output_tokens: int
     latency_ms: int
+    cost_usd: float | None = None  # provider-reported cost, if it knows better than the catalog
+
+
+@dataclass
+class AgentEditResult:
+    """Outcome of letting an agentic backend edit the workspace directly."""
+
+    summary: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+    cost_usd: float | None = None
 
 
 class Provider(Protocol):
@@ -32,3 +45,10 @@ class Provider(Protocol):
     ) -> Completion: ...
 
     def list_models(self) -> list[str]: ...
+
+
+@runtime_checkable
+class InPlaceEditor(Protocol):
+    """Backends that can edit files in a workspace themselves (Claude Code, Codex CLI)."""
+
+    def edit_in_place(self, model: str, root: Path, prompt: str, effort: str | None = None) -> AgentEditResult: ...

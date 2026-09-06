@@ -9,6 +9,8 @@ from .orchestrator import RunResult
 
 
 def _price(m: models.ModelSpec) -> str:
+    if m.account_backed:
+        return " your account "
     if m.input_per_m is None:
         return "  price n/a  "
     return f"${m.input_per_m:>5.2f}/${m.output_per_m:<6.2f}"
@@ -30,7 +32,7 @@ def _resolve(answer: str, specs: list[models.ModelSpec], default: str | None) ->
     for m in specs:
         if m.id == answer:
             return m.id
-    if answer.startswith(("claude", "gpt", "o1", "o3", "o4")):
+    if answer.startswith(("claude", "codex", "gpt", "o1", "o3", "o4")):
         return answer  # allow ids we have not catalogued
     return None
 
@@ -38,7 +40,7 @@ def _resolve(answer: str, specs: list[models.ModelSpec], default: str | None) ->
 def pick_models(available: list[str]) -> tuple[str, str]:
     """Interactively choose the architect (reasoning) and editor (coding) models."""
     if not available:
-        raise SystemExit("no providers logged in; run `bicameral login anthropic` and/or `bicameral login openai`")
+        raise SystemExit("no backends available; sign in with `bicameral login claude|codex|anthropic|openai` or open the TUI")
     cfg = config.load()
     print("Available models:")
     specs = list_models(available)
@@ -53,8 +55,8 @@ def pick_models(available: list[str]) -> tuple[str, str]:
                 return p
         return ids[0]
 
-    arch_default = default_for("last_architect", ("claude-opus-5", "claude-fable-5-1", "gpt-5", "o3"))
-    edit_default = default_for("last_editor", ("claude-sonnet-5", "gpt-5-codex", "gpt-5", "claude-opus-5"))
+    arch_default = default_for("last_architect", ("claude:opus", "claude-opus-5", "claude-fable-5-1", "gpt-5", "o3"))
+    edit_default = default_for("last_editor", ("codex:gpt-5-codex", "claude:sonnet", "claude-sonnet-5", "gpt-5-codex", "gpt-5"))
 
     while True:
         arch = _resolve(input(f"Architect model (plans + reviews) [{arch_default}]: "), specs, arch_default)

@@ -1,0 +1,155 @@
+Screen {
+    background: $background;
+}
+
+Header {
+    background: $surface;
+    color: $foreground;
+    text-style: bold;
+}
+
+Footer {
+    background: $surface;
+}
+
+TabbedContent {
+    height: 1fr;
+}
+
+TabPane {
+    padding: 0 1;
+}
+
+#hero {
+    height: 5;
+    padding: 0 2;
+    margin: 1 0 0 0;
+    border: round $primary 40%;
+    background: $surface;
+    content-align: left middle;
+}
+
+.tiles {
+    height: auto;
+    margin: 1 0 0 0;
+}
+
+.tile {
+    width: 1fr;
+    height: 7;
+    margin: 0 1 0 0;
+    padding: 0 1;
+    border: round $primary 50%;
+    background: $surface;
+}
+
+.tile:last-of-type {
+    margin: 0;
+}
+
+.tile .caption {
+    color: $secondary;
+    text-style: bold;
+}
+
+.tile Digits {
+    color: $foreground;
+    width: auto;
+}
+
+.tile .sub {
+    color: $foreground 60%;
+}
+
+.tile.good Digits { color: $success; }
+.tile.warn Digits { color: $warning; }
+.tile.accent Digits { color: $accent; }
+
+.section-title {
+    color: $secondary;
+    text-style: bold;
+    margin: 1 0 0 0;
+}
+
+.panel {
+    border: round $panel;
+    background: $surface;
+    padding: 0 1;
+    margin: 0 0 1 0;
+    height: auto;
+}
+
+DataTable {
+    background: $surface;
+    height: auto;
+    max-height: 16;
+    margin: 0 0 1 0;
+}
+
+DataTable > .datatable--header {
+    background: $panel;
+    color: $secondary;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $primary 30%;
+}
+
+Sparkline {
+    height: 3;
+    margin: 0 0 1 0;
+}
+
+Sparkline > .sparkline--max-color { color: $success; }
+Sparkline > .sparkline--min-color { color: $error 60%; }
+
+RichLog {
+    background: $surface;
+    border: round $panel;
+    height: 1fr;
+    min-height: 8;
+    padding: 0 1;
+}
+
+Button {
+    margin: 0 1 0 0;
+    min-width: 12;
+}
+
+.row {
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+.row Select {
+    width: 1fr;
+    margin: 0 1 0 0;
+}
+
+.row Input {
+    width: 1fr;
+    margin: 0 1 0 0;
+}
+
+.row Label {
+    padding: 1 1 0 0;
+    color: $foreground 70%;
+}
+
+.row Switch {
+    margin: 0 1 0 0;
+}
+
+.status-line {
+    color: $foreground 80%;
+    margin: 0 0 1 0;
+}
+
+.ok { color: $success; text-style: bold; }
+.bad { color: $error; text-style: bold; }
+.dim { color: $foreground 50%; }
+
+VerticalScroll {
+    height: 1fr;
+}

@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS eval_runs (
 class Store:
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
-        self.conn = sqlite3.connect(self.path)
+        self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
 
@@ -120,6 +120,9 @@ class Store:
 
     def runs(self, limit: int = 50) -> list[sqlite3.Row]:
         return list(self.conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,)))
+
+    def steps_for(self, run_id: int) -> list[sqlite3.Row]:
+        return list(self.conn.execute("SELECT * FROM steps WHERE run_id = ? ORDER BY step_idx", (run_id,)))
 
     # -- routing -----------------------------------------------------------
 

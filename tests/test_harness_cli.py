@@ -90,9 +90,9 @@ def test_cli_parser_and_offline_commands(capsys):
 
     assert main(["status"]) == 0
     out = capsys.readouterr().out
-    assert "not logged in" in out
+    assert "backends:" in out and "OpenAI API" in out and "Claude Code" in out
     assert main(["models"]) == 0
     assert "claude-opus-5" in capsys.readouterr().out
     assert main(["lessons"]) == 0
     assert main(["stats"]) == 0
-    assert "no runs yet" in capsys.readouterr().out
+    assert "no eval runs" in capsys.readouterr().out

@@ -1,8 +1,12 @@
-"""Model catalog with pricing and capability flags.
+"""Model catalog with pricing, capability flags and backend resolution.
+
+Model ids carry an optional backend prefix:
+- `claude:<model>`  headless Claude Code on the user's Anthropic account
+- `codex:<model>`   Codex CLI on the user's ChatGPT account
+- anything else     the Anthropic or OpenAI API, inferred from the id
 
 The static catalog is a starting point; `bicameral models --refresh` pulls the
-live model list from each provider and stores extra ids in config. Unknown ids
-still work: provider and capabilities are inferred from the id prefix.
+live list from API providers and stores extra ids in config.
 """
 
 from __future__ import annotations
@@ -10,6 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import config
+
+BACKEND_PREFIXES = {"claude": "claude-cli", "codex": "codex-cli"}
+ACCOUNT_PROVIDERS = ("claude-cli", "codex-cli")
 
 
 @dataclass(frozen=True)
@@ -22,8 +29,17 @@ class ModelSpec:
     supports_effort: bool = True
     note: str = ""
 
+    @property
+    def account_backed(self) -> bool:
+        return self.provider in ACCOUNT_PROVIDERS
+
 
 CATALOG: tuple[ModelSpec, ...] = (
+    ModelSpec("claude-cli", "claude:opus", "Claude Opus via Claude Code", 0.0, 0.0, True, "your Anthropic account"),
+    ModelSpec("claude-cli", "claude:sonnet", "Claude Sonnet via Claude Code", 0.0, 0.0, True, "your Anthropic account"),
+    ModelSpec("claude-cli", "claude:haiku", "Claude Haiku via Claude Code", 0.0, 0.0, True, "your Anthropic account"),
+    ModelSpec("codex-cli", "codex:gpt-5-codex", "GPT-5 Codex via Codex CLI", 0.0, 0.0, True, "your ChatGPT account"),
+    ModelSpec("codex-cli", "codex:gpt-5", "GPT-5 via Codex CLI", 0.0, 0.0, True, "your ChatGPT account"),
     ModelSpec("anthropic", "claude-fable-5-1", "Claude Fable 5.1", 10.0, 50.0, True, "strongest reasoning"),
     ModelSpec("anthropic", "claude-opus-5", "Claude Opus 5", 5.0, 25.0, True, "frontier reasoning + coding"),
     ModelSpec("anthropic", "claude-sonnet-5", "Claude Sonnet 5", 2.0, 10.0, True, "fast, strong coding"),
@@ -38,14 +54,29 @@ CATALOG: tuple[ModelSpec, ...] = (
 _OPENAI_REASONING_PREFIXES = ("o1", "o3", "o4", "gpt-5")
 
 
+def split_backend(model_id: str) -> tuple[str | None, str]:
+    """('claude-cli', 'sonnet') for 'claude:sonnet'; (None, id) for API ids."""
+    if ":" in model_id:
+        prefix, rest = model_id.split(":", 1)
+        if prefix in BACKEND_PREFIXES:
+            return BACKEND_PREFIXES[prefix], rest
+    return None, model_id
+
+
 def infer_provider(model_id: str) -> str:
-    return "anthropic" if model_id.startswith("claude") else "openai"
+    backend, bare = split_backend(model_id)
+    if backend:
+        return backend
+    return "anthropic" if bare.startswith("claude") else "openai"
 
 
 def _infer_effort(provider: str, model_id: str) -> bool:
-    if provider == "anthropic":
-        return "haiku" not in model_id
-    return model_id.startswith(_OPENAI_REASONING_PREFIXES)
+    _, bare = split_backend(model_id)
+    if provider in ("anthropic", "claude-cli"):
+        return "haiku" not in bare
+    if provider == "codex-cli":
+        return True
+    return bare.startswith(_OPENAI_REASONING_PREFIXES)
 
 
 def all_models() -> list[ModelSpec]:
@@ -66,7 +97,9 @@ def find(model_id: str) -> ModelSpec:
         if m.id == model_id:
             return m
     provider = infer_provider(model_id)
-    return ModelSpec(provider, model_id, model_id, None, None, _infer_effort(provider, model_id), "unknown")
+    price = (0.0, 0.0) if provider in ACCOUNT_PROVIDERS else (None, None)
+    note = "your account" if provider in ACCOUNT_PROVIDERS else "unknown"
+    return ModelSpec(provider, model_id, model_id, price[0], price[1], _infer_effort(provider, model_id), note)
 
 
 def estimate_cost(spec: ModelSpec, input_tokens: int, output_tokens: int) -> float | None:

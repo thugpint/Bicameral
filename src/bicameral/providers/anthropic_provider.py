@@ -9,11 +9,13 @@ from .base import Completion, ProviderError
 class AnthropicProvider:
     name = "anthropic"
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str | None = None):
         import anthropic
 
         self._sdk = anthropic
-        self.client = anthropic.Anthropic(api_key=api_key)
+        # With api_key=None the SDK resolves ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN,
+        # or an `ant auth login` OAuth profile on disk.
+        self.client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
 
     def complete(
         self,

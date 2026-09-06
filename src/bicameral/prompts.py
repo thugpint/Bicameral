@@ -98,6 +98,33 @@ def build_edit_prompt(
     return "".join(parts)
 
 
+AGENT_EDITOR_PREAMBLE = """You are the Editor in a two-model coding system, working directly inside the repository. The Architect has planned the work; implement exactly one step by editing files in place with your tools.
+
+Rules:
+- Make the smallest change that satisfies the step's acceptance criterion. Do not refactor, reformat or "improve" unrelated code.
+- Do not run the test suite, install packages, create commits, or touch files outside the repository.
+- Do not create scratch files, notes, or backups.
+- If reviewer feedback or a failing verification is included, fix exactly what it points at.
+- When you are done, reply with a short summary of what you changed and why (no code)."""
+
+
+def build_agent_edit_prompt(step: Step, plan_summary: str, examples: list[Example], lessons: list[Lesson], feedback: str) -> str:
+    parts = [
+        AGENT_EDITOR_PREAMBLE + "\n\n",
+        f"## Overall task\n{plan_summary}\n\n",
+        f"## Your step: {step.title}\n{step.description}\n\nAcceptance criterion: {step.acceptance}\n",
+        (f"Files the Architect expects you to touch: {', '.join(step.files)}\n\n" if step.files else "\n"),
+        _lessons_block([l for l in lessons if l.role in ("editor", "any")]),
+    ]
+    if examples:
+        ex = "\n\n".join(f"### Past step: {e.description[:200]}\n```diff\n{e.diff}\n```" for e in examples)
+        parts.append(f"## Examples of accepted edits on similar steps\n{ex}\n\n")
+    if feedback:
+        parts.append(f"## Feedback on the previous attempt (fix this)\n{feedback}\n\n")
+    parts.append("Begin.")
+    return "".join(parts)
+
+
 def build_review_prompt(step: Step, diff: str, verify_output: str | None) -> str:
     parts = [
         f"## Step: {step.title}\n{step.description}\n\nAcceptance criterion: {step.acceptance}\n\n",

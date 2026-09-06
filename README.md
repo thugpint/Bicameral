@@ -1,77 +1,80 @@
 # Bicameral
 
-A self-improving architect/editor orchestrator for coding tasks.
+**Two minds, one diff.** A self-improving architect/editor orchestrator that lives inside Claude Code.
 
-Every task is split between two frontier models by strength: a **reasoning model** (the Architect) plans the work and reviews every diff, and a **coding model** (the Editor) writes the diffs. The loop is closed with three learning mechanisms that improve delegation and prompting over time without touching any model weights:
+Run `/bicameral <task>` and the task is split between two frontier models by strength. **Claude Code is the Architect**: it plans, reviews every diff, and reflects, on your own Anthropic account. The **Editor** is a second model that writes the diffs, on your own account too: OpenAI through the Codex CLI's *Sign in with ChatGPT*, or a second Claude through headless Claude Code. API keys work as well, but nothing requires one.
 
-- **Learned routing** — a Thompson-sampling bandit over (step kind, model) decides which of the two models executes each step, starting from the Architect's suggestion and overriding it once the evidence says otherwise.
-- **Reflective memory** — after every run the Architect writes lessons about what worked; lessons are retrieved by relevance for future tasks and scored by whether the runs they were used in succeeded. Losers get pruned.
-- **Retrieved examples** — diffs that were accepted by the Reviewer *and* passed verification are stored and shown to the Editor as few-shot examples on similar steps.
+A local MCP server you host closes the loop, and it is where the edge is:
 
-And two things that make the "self-improving" claim measurable instead of vibes:
-
-- **A reviewer gate** — the Architect verifies every Editor diff against the step's acceptance criterion before it is accepted, then the repo's test command runs. Rejected or failing edits are rolled back and retried with the feedback.
-- **An evaluation harness** — fixture repositories with failing tests, hard pass/fail logging per task, and a `--baseline` mode with learning switched off so you can compare.
+- **Learned routing** — a Thompson-sampling bandit over (step kind, model) decides whether each step goes to the Editor or stays with the Architect. It starts from the Architect's suggestion and overrides it once the track record says so.
+- **Reviewer gate** — every Editor diff is reviewed by the Architect against the step's acceptance criterion *and* your test command. Rejected or failing edits are rolled back automatically and retried with the feedback.
+- **Reflective memory** — after every run the Architect writes 0–3 transferable lessons. Lessons are retrieved by relevance for later tasks and scored by whether the runs they were used in succeeded. Losers get pruned.
+- **Retrieved examples** — diffs that passed both review and verification are shown to the Editor as few-shot examples on similar steps.
+- **Hard evaluation** — fixture repositories with failing tests, hard pass/fail logging per task, and a baseline mode with learning switched off, so "self-improving" is a number, not a vibe.
 
 ## Install
 
 ```bash
 pip install -e .
+bicameral install      # writes the /bicameral skill and registers the MCP server with Claude Code
 ```
 
-Python 3.11+. Dependencies: `anthropic`, `openai`.
+Python 3.11+. Then restart Claude Code.
 
-## Login
+## Sign in
 
-```bash
-bicameral login anthropic
-bicameral login openai
-```
-
-Neither provider offers a public third-party OAuth flow, so login means pasting an API key (input is hidden, the key is validated against the provider's model list, and stored in `~/.bicameral/credentials.json`). `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` environment variables take precedence if set.
-
-## Use
-
-Start the REPL from inside the repository you want to work on:
+Open the TUI:
 
 ```bash
 bicameral
 ```
 
+The **Setup** tab shows every backend and signs you in without leaving the terminal:
+
+| Backend | What it is | How you sign in |
+|---|---|---|
+| Claude Code | your Anthropic account (the Architect, and optionally a second Claude as Editor) | **Sign in to Claude** → `claude auth login` |
+| Codex CLI | your ChatGPT account as the Editor | **Sign in to ChatGPT** → `codex login` (`npm i -g @openai/codex` first) |
+| Anthropic API | API key or `ant auth login` OAuth profile | paste a key, or it is picked up from the profile |
+| OpenAI API | API key | paste a key |
+
+The same is available from the command line: `bicameral login claude`, `bicameral login codex`, `bicameral login anthropic`, `bicameral login openai`.
+
+## Use it in Claude Code
+
 ```
-bicameral> /bicameral add a --dry-run flag to the export command
-Available models:
-   1. claude-fable-5-1   anthropic  $10.00/$50.00  per 1M  strongest reasoning
-   2. claude-opus-5      anthropic  $ 5.00/$25.00  per 1M  frontier reasoning + coding
-   3. claude-sonnet-5    anthropic  $ 2.00/$10.00  per 1M  fast, strong coding
-   ...
-Architect model (plans + reviews) [claude-opus-5]:
-Editor model (writes the diffs) [gpt-5-codex]:
-```
-
-It then plans the task, decides per step which of the two models should execute it, applies the edits, has the Architect review the diff, runs your tests, and records everything. Your last model choice becomes the default next time.
-
-Non-interactive:
-
-```bash
-bicameral run "fix the flaky retry test" --architect claude-opus-5 --editor gpt-5-codex
+/bicameral add a --dry-run flag to the export command
 ```
 
-Other commands: `models [--refresh]`, `stats`, `lessons [--prune]`, `status`, `logout`. Inside the REPL the same commands are available with a leading slash.
+What happens:
+
+1. **Status and model choice** — Claude checks which Editor backends are signed in and asks which Editor model to use (your last choice is recommended). The Architect is whatever model your Claude Code session runs; change it with `/model`.
+2. **Recall** — lessons and similar accepted edits from past runs, plus the routing track record, are pulled into context before planning.
+3. **Plan** — Claude investigates the repo and registers 1–4 small steps, each with files, an acceptance criterion and a suggested role, plus the test command.
+4. **Route, edit, verify, review** — per step, the server picks who executes it. Delegated steps are edited by the Editor model and come back as a diff with the test output; steps routed to Claude are edited by Claude and diffed the same way. Claude reviews against the acceptance criterion and accepts or rejects. Rejections roll back and retry with feedback, up to 3 attempts. Acceptance is refused while required verification is failing.
+5. **Finish** — final verification, outcome logging, lesson storage, and a short report.
+
+## The TUI
+
+`bicameral` opens a dashboard with seven tabs:
+
+- **Overview** — runs, success rate with learning on vs off, editor spend, a sparkline of recent outcomes, backend health, the routing table, recent runs.
+- **Setup** — sign in to accounts, save API keys, install/uninstall the Claude Code integration.
+- **Models** — the catalog with availability and prices, and your default Editor.
+- **Run** — run a task standalone with any two models (for example Architect `claude:opus`, Editor `codex:gpt-5-codex`, both on your accounts).
+- **Evals** — run the bundled suite with learning on or as a baseline, and read the comparison.
+- **Runs** — history with per-step detail: who executed it, attempts, verification, feedback.
+- **Lessons** — what the system has learned, with scores, and a prune button.
 
 ## Measure it
 
 ```bash
-# learning off: static routing (follow the architect), no memory, no examples
-bicameral eval --baseline --runs 3
-
-# learning on: routing, memory and examples all active
-bicameral eval --runs 3
-
+bicameral eval --baseline --runs 3 --architect claude:opus --editor codex:gpt-5-codex
+bicameral eval --runs 3            --architect claude:opus --editor codex:gpt-5-codex
 bicameral stats
 ```
 
-`stats` prints success rate and cost for learning on vs off, the routing table (accepted/total per step kind and model), the eval trend per batch of runs, and the lessons with the best track record. The bundled suite has three small Python tasks (a bug fix, a feature, a refactor). Add your own by dropping a directory with `task.json` and a `fixture/` tree into any folder and passing `--suite DIR`:
+`stats` prints success rate and cost for learning on vs off, the routing table (accepted/total per step kind and model), the eval trend per batch, and the lessons with the best track record. Add your own tasks by dropping a directory with `task.json` and a `fixture/` tree into any folder and passing `--suite DIR`:
 
 ```json
 {
@@ -83,43 +86,41 @@ bicameral stats
 }
 ```
 
-`{python}` expands to the interpreter running Bicameral.
+## Model ids
 
-## How a run works
+| Prefix | Backend | Examples |
+|---|---|---|
+| `claude:` | headless Claude Code, your Anthropic account | `claude:opus`, `claude:sonnet`, `claude:haiku` |
+| `codex:` | Codex CLI, your ChatGPT account | `codex:gpt-5-codex`, `codex:gpt-5` |
+| none | Anthropic or OpenAI API | `claude-opus-5`, `claude-sonnet-5`, `gpt-5-codex`, `o3` |
 
-1. **Plan** — the Architect gets the task, the file tree, manifests, and the most relevant lessons from memory. It can ask for file contents before committing to a plan. It returns 1–4 steps, each with files, an acceptance criterion, a suggested role, and a verification command.
-2. **Route** — for each step the router picks Architect or Editor model. With learning off it follows the suggestion. With learning on it samples from each arm's Beta posterior, with the suggestion as a prior pseudo-success.
-3. **Edit** — the chosen model receives the step, the current file contents, retrieved examples of accepted edits on similar steps, and any feedback from the previous attempt. It returns search/replace blocks (exact, unique excerpts) and new files. Edits are validated as a set before anything is written.
-4. **Verify + Review** — the verification command runs, then the Architect reviews the diff together with the verification output. On rejection or failure the edit is rolled back and the feedback goes into the next attempt (3 attempts by default). If the tests were already failing before the run started, intermediate steps are allowed to leave them red; the last step must make them pass.
-5. **Record** — every run, step, model choice, attempt count, verdict, token count and cost is written to `~/.bicameral/bicameral.db`. Routing statistics are updated per (step kind, model).
-6. **Reflect** — the Architect reads the run log and writes 0–3 transferable lessons. Lessons that were in context for this run gain or lose score depending on the outcome.
+Inside Claude Code the Architect is always the host session (`claude-code` in the stats); the prefixes matter for the Editor and for standalone runs.
 
 ## Layout
 
 ```
 src/bicameral/
-  cli.py            REPL and subcommands
-  orchestrator.py   the plan → route → edit → review → verify → record → reflect loop
+  mcp_server.py     the tools Claude Code calls: status, recall, begin, execute, check, review, finish, stats
+  skill/SKILL.md    the /bicameral skill: the Architect protocol
+  engine.py         plan / route / edit / verify / review / rollback / record / reflect, shared by both loops
+  orchestrator.py   standalone loop (CLI, evals, TUI Run tab)
   router.py         Thompson-sampling bandit over (step kind, model)
-  memory.py         lessons (reflective memory) and examples (retrieved diffs)
-  retrieval.py      dependency-free BM25
-  prompts.py        system prompts and prompt builders for each role
-  schemas.py        JSON schemas for every model call (strict-mode compatible)
-  edits.py          search/replace application with atomic validation and rollback
-  workspace.py      file tree, snapshots, command runner, test-command detection
-  store.py          SQLite: runs, steps, routing, lessons, examples, eval_runs
-  providers/        Anthropic and OpenAI adapters behind one interface
+  memory.py         lessons and examples, BM25 retrieval, scoring and pruning
+  providers/        anthropic (API/OAuth profile), openai (API), claude_cli, codex_cli
+  auth.py           who is signed in to what, and how to sign in
+  install.py        writes the skill, registers the MCP server via `claude mcp add`
+  tui/              the Textual app
   evals/            harness and bundled fixture tasks
-tests/              offline tests with a scripted fake provider
+tests/              offline tests with scripted fake backends
 ```
 
 ## Notes and limits
 
-- Models are called with structured JSON output (`output_config.format` on Anthropic, `text.format` with `strict` on OpenAI) so parsing failures are rare; there is one retry if they happen.
-- Reasoning effort is passed where the model supports it (`output_config.effort` on Claude, `reasoning.effort` on OpenAI reasoning models). Defaults: Architect `high`, Editor `medium`. Change them in `~/.bicameral/config.json`.
-- Pricing in the catalog is a snapshot; unknown or refreshed models run fine but show cost as `n/a`.
-- Retrieval is BM25 over local SQLite, not embeddings. This keeps the system dependency-free and offline; it is the obvious place to upgrade.
-- The routing bandit explores: on a fresh install it will occasionally send a step to the non-suggested model to gather evidence. That is intentional, and it costs money.
+- The Codex CLI is driven through `codex exec` (`--full-auto` inside the repo for edits, `--output-schema` for JSON). It is exercised in tests through a fake subprocess; if a flag drifts in a Codex release, `providers/codex_cli.py` is a one-line fix.
+- Headless Claude Code is driven with `claude -p --output-format json`, with `--json-schema` for structured replies and `--permission-mode acceptEdits` for in-place edits. Nesting env vars are stripped so it runs from inside a Claude Code session.
+- Account-backed backends are billed to your subscription; the TUI's spend tile only counts API tokens.
+- Retrieval is BM25 over local SQLite, not embeddings. Dependency-free and offline; the obvious upgrade point.
+- The bandit explores. On a fresh install it will occasionally send a step to the non-suggested side to gather evidence. That is the point.
 
 ## License
 

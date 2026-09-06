@@ -1,4 +1,8 @@
-"""Command-line entry point: `bicameral` (REPL) and subcommands."""
+"""Command-line entry point.
+
+`bicameral` with no arguments opens the TUI. Subcommands cover everything the
+TUI does for scripting, plus `mcp` (the server Claude Code talks to).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ import getpass
 import sys
 from pathlib import Path
 
-from . import __version__, config, credentials, models, paths
+from . import __version__, auth, config, credentials, install, models, paths
 from .evals import harness
 from .memory import Memory
 from .orchestrator import Orchestrator, OrchestratorError, RunConfig
@@ -15,15 +19,6 @@ from .providers import LLM, ProviderError, build_provider, build_providers
 from .store import Store
 from .ui import list_models, print_result, resolve_models
 from .workspace import Workspace
-
-HELP = """commands:
-  /bicameral <task>   plan, delegate, edit, review and verify a task in the current directory
-  /models             list models (add --refresh to pull the live list from each provider)
-  /login <provider>   store an API key for anthropic or openai
-  /stats              success rates, routing table, eval results
-  /lessons            lessons the system has learned (add --prune to drop losers)
-  /help, /quit
-Plain text without a leading slash is treated as a task."""
 
 
 def _store() -> Store:
@@ -37,9 +32,25 @@ def _llm() -> LLM:
 # -- subcommands ---------------------------------------------------------------
 
 
+def cmd_install() -> int:
+    for m in install.install_all():
+        print(m)
+    return 0
+
+
+def cmd_uninstall() -> int:
+    for m in install.uninstall_all():
+        print(m)
+    return 0
+
+
 def cmd_login(provider: str, verify: bool = True) -> int:
+    if provider == "claude":
+        return _interactive_login("claude")
+    if provider == "codex":
+        return _interactive_login("codex")
     if provider not in credentials.PROVIDERS:
-        print(f"unknown provider '{provider}'; choose from {', '.join(credentials.PROVIDERS)}")
+        print(f"unknown provider '{provider}'")
         return 2
     print(f"Paste your {provider} API key (input hidden). It is stored only in {paths.credentials_path()}.")
     key = getpass.getpass("API key: ").strip()
@@ -58,6 +69,26 @@ def cmd_login(provider: str, verify: bool = True) -> int:
     return 0
 
 
+def _interactive_login(which: str) -> int:
+    import subprocess
+
+    from .providers.claude_cli import clean_env
+    from .providers.claude_cli import find_executable as find_claude
+    from .providers.codex_cli import find_executable as find_codex
+
+    if which == "claude":
+        exe = find_claude()
+        if not exe:
+            print("claude is not installed; install Claude Code first")
+            return 1
+        return subprocess.call([exe, "auth", "login"], env=clean_env())
+    exe = find_codex()
+    if not exe:
+        print("codex is not installed; run: npm i -g @openai/codex")
+        return 1
+    return subprocess.call([exe, "login"], env=clean_env())
+
+
 def cmd_logout(provider: str) -> int:
     credentials.clear_key(provider)
     print(f"removed stored key for {provider}")
@@ -65,20 +96,26 @@ def cmd_logout(provider: str) -> int:
 
 
 def cmd_status() -> int:
-    for p in credentials.PROVIDERS:
-        src = credentials.key_source(p)
-        print(f"  {p:<10} {'logged in (' + src + ')' if src else 'not logged in'}")
+    print("backends:")
+    for b in auth.backends():
+        mark = "ready      " if b.available else "unavailable"
+        print(f"  {mark} {b.label}: {b.detail}" + (f"  -> {b.login_hint}" if b.login_hint else ""))
+    st = install.state()
+    print(f"\nClaude Code: skill {'installed' if st.skill_installed else 'NOT installed'}, MCP server "
+          f"{'registered' if st.mcp_installed else 'NOT registered'}" + ("" if st.claude_found else " (claude CLI not found)"))
     cfg = config.load()
-    print(f"  last models: architect={cfg.get('last_architect') or '-'} editor={cfg.get('last_editor') or '-'}")
-    print(f"  data dir:    {paths.home()}")
+    print(f"defaults: architect={cfg.get('last_architect') or '-'} editor={cfg.get('last_editor') or '-'}")
+    print(f"data dir: {paths.home()}")
     return 0
 
 
 def cmd_models(refresh: bool = False) -> int:
-    available = credentials.logged_in()
+    available = auth.available_ids()
     if refresh:
         extra = {}
         for name, provider in build_providers().items():
+            if name not in ("anthropic", "openai"):
+                continue
             try:
                 ids = provider.list_models()
             except ProviderError as e:
@@ -86,32 +123,23 @@ def cmd_models(refresh: bool = False) -> int:
                 continue
             extra[name] = ids
             print(f"  {name}: {len(ids)} models")
-        cfg = config.load()
-        merged = dict(cfg.get("extra_models") or {})
+        merged = dict(config.load().get("extra_models") or {})
         merged.update(extra)
         config.update(extra_models=merged)
     if not available:
-        print("no providers logged in; showing catalog")
-        available = list(credentials.PROVIDERS)
+        print("no backends available; showing the full catalog")
+        available = sorted({m.provider for m in models.all_models()})
     list_models(available)
     return 0
 
 
 def _run_config(args: argparse.Namespace, architect: str, editor: str, learning: bool) -> RunConfig:
     cfg = config.load()
-    verify: str | None
-    if getattr(args, "no_verify", False):
-        verify = ""
-    else:
-        verify = getattr(args, "verify", None)
+    verify: str | None = "" if getattr(args, "no_verify", False) else getattr(args, "verify", None)
     return RunConfig(
-        architect_model=architect,
-        editor_model=editor,
-        learning=learning,
-        verify_command=verify,
+        architect_model=architect, editor_model=editor, learning=learning, verify_command=verify,
         max_attempts=getattr(args, "attempts", None) or int(cfg.get("max_attempts", 3)),
-        architect_effort=str(cfg.get("architect_effort", "high")),
-        editor_effort=str(cfg.get("editor_effort", "medium")),
+        architect_effort=str(cfg.get("architect_effort", "high")), editor_effort=str(cfg.get("editor_effort", "medium")),
     )
 
 
@@ -161,33 +189,11 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
 
 def cmd_stats() -> int:
+    from .mcp_server import Bicameral
+
     store = _store()
     try:
-        runs = store.runs(limit=1000)
-        if not runs:
-            print("no runs yet")
-        else:
-            for learning in (1, 0):
-                subset = [r for r in runs if r["learning"] == learning and r["success"] is not None]
-                if subset:
-                    ok = sum(r["success"] for r in subset)
-                    cost = sum(r["cost_usd"] or 0 for r in subset)
-                    print(f"runs with learning {'on ':<3}: {ok}/{len(subset)} succeeded ({ok / len(subset):.0%}), ${cost:.4f} total"
-                          if learning else
-                          f"runs with learning off: {ok}/{len(subset)} succeeded ({ok / len(subset):.0%}), ${cost:.4f} total")
-        rows = store.routing_table()
-        if rows:
-            print("\nrouting table (step kind x model -> accepted/total):")
-            for r in rows:
-                total = r["successes"] + r["failures"]
-                print(f"  {r['kind']:<12} {r['model']:<28} {r['successes']}/{total}")
-        print()
-        print(harness.format_report(store))
-        lessons = store.lessons()
-        if lessons:
-            print("\ntop lessons:")
-            for l in lessons[:10]:
-                print(f"  [{l.score:+.1f}, used {l.uses}x] ({l.role}) {l.text}")
+        print(Bicameral(store=store).stats())
     finally:
         store.close()
     return 0
@@ -197,98 +203,65 @@ def cmd_lessons(prune: bool = False) -> int:
     store = _store()
     try:
         if prune:
-            n = Memory(store).prune()
-            print(f"pruned {n} lesson(s) with score below {Memory.PRUNE_BELOW}")
+            print(f"pruned {Memory(store).prune()} lesson(s)")
         lessons = store.lessons()
         if not lessons:
             print("no lessons yet; they are written after each run with learning on")
         for l in lessons:
-            kinds = ", ".join(l.applies_to) or "any"
-            print(f"  #{l.id} [{l.score:+.1f}, used {l.uses}x, conf {l.confidence:.2f}] ({l.role}; {kinds}) {l.text}")
+            print(f"  #{l.id} [{l.score:+.1f}, used {l.uses}x, conf {l.confidence:.2f}] ({l.role}; {', '.join(l.applies_to) or 'any'}) {l.text}")
     finally:
         store.close()
     return 0
 
 
-# -- REPL ----------------------------------------------------------------------
+def cmd_tui(path: str | None) -> int:
+    from .tui import run
+
+    run(path)
+    return 0
 
 
-def repl() -> int:
-    print(f"Bicameral {__version__} - architect/editor orchestrator. Type /help for commands.")
-    logged = credentials.logged_in()
-    if not logged:
-        print("No providers logged in yet. Use /login anthropic and/or /login openai.")
-    else:
-        print(f"Logged in: {', '.join(logged)}")
-    while True:
-        try:
-            line = input("bicameral> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-        if not line:
-            continue
-        cmd, _, rest = line.partition(" ")
-        rest = rest.strip()
-        if cmd in ("/quit", "/exit", "/q"):
-            return 0
-        if cmd == "/help":
-            print(HELP)
-        elif cmd == "/login":
-            cmd_login(rest or input("provider (anthropic/openai): ").strip())
-        elif cmd == "/logout":
-            cmd_logout(rest)
-        elif cmd == "/status":
-            cmd_status()
-        elif cmd == "/models":
-            cmd_models(refresh="--refresh" in rest)
-        elif cmd == "/stats":
-            cmd_stats()
-        elif cmd == "/lessons":
-            cmd_lessons(prune="--prune" in rest)
-        elif cmd == "/bicameral" or not cmd.startswith("/"):
-            task = rest if cmd == "/bicameral" else line
-            if not task:
-                task = input("task: ").strip()
-            if not task:
-                continue
-            ns = argparse.Namespace(task=task, architect=None, editor=None, no_learning=False, verify=None,
-                                    no_verify=False, path=".", attempts=None)
-            try:
-                cmd_run(ns)
-            except SystemExit as e:
-                print(e)
-        else:
-            print(f"unknown command {cmd}; /help for the list")
+def cmd_mcp() -> int:
+    from .mcp_server import main as serve
+
+    serve()
+    return 0
 
 
 # -- argparse ------------------------------------------------------------------
 
 
 def _add_model_flags(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--architect", help="model id for planning and review (reasoning model)")
-    p.add_argument("--editor", help="model id for writing diffs (coding model)")
-    p.add_argument("--attempts", type=int, help="max attempts per step (default from config, 3)")
+    p.add_argument("--architect", help="model id for planning and review (e.g. claude:opus, claude-opus-5)")
+    p.add_argument("--editor", help="model id for writing diffs (e.g. codex:gpt-5-codex, claude:sonnet, gpt-5-codex)")
+    p.add_argument("--attempts", type=int, help="max attempts per step (default 3)")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="bicameral", description="Self-improving architect/editor coding orchestrator.")
+    p = argparse.ArgumentParser(prog="bicameral", description="Self-improving architect/editor coding orchestrator. No arguments opens the TUI.")
     p.add_argument("--version", action="version", version=f"bicameral {__version__}")
     sub = p.add_subparsers(dest="command")
 
-    s = sub.add_parser("login", help="store an API key for a provider")
-    s.add_argument("provider", choices=credentials.PROVIDERS)
-    s.add_argument("--no-verify", action="store_true", help="skip the API check before saving")
+    s = sub.add_parser("tui", help="open the TUI")
+    s.add_argument("--path", default=None, help="repository to preselect in the Run tab")
+
+    sub.add_parser("install", help="install the /bicameral skill and MCP server into Claude Code")
+    sub.add_parser("uninstall", help="remove the skill and MCP server from Claude Code")
+    sub.add_parser("mcp", help="run the MCP server on stdio (Claude Code launches this for you)")
+
+    s = sub.add_parser("login", help="sign in: claude (Anthropic account), codex (ChatGPT account), anthropic/openai (API key)")
+    s.add_argument("provider", choices=("claude", "codex", "anthropic", "openai"))
+    s.add_argument("--no-verify", action="store_true", help="skip the API check before saving a key")
 
     s = sub.add_parser("logout", help="remove a stored API key")
     s.add_argument("provider", choices=credentials.PROVIDERS)
 
-    sub.add_parser("status", help="show login state and defaults")
+    sub.add_parser("status", help="backends, sign-in state and Claude Code integration")
 
     s = sub.add_parser("models", help="list models")
-    s.add_argument("--refresh", action="store_true", help="pull the live model list from each provider")
+    s.add_argument("--refresh", action="store_true", help="pull the live model list from API providers")
 
-    s = sub.add_parser("run", help="run a task in a directory")
+    s = sub.add_parser("run", help="run a task standalone (outside Claude Code)")
     s.add_argument("task")
     s.add_argument("--path", default=".", help="repository directory (default: cwd)")
     s.add_argument("--no-learning", action="store_true", help="disable routing/memory/examples (baseline mode)")
@@ -313,23 +286,32 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.command is None:
-        return repl()
-    if args.command == "login":
+    cmd = args.command
+    if cmd is None:
+        return cmd_tui(None)
+    if cmd == "tui":
+        return cmd_tui(args.path)
+    if cmd == "install":
+        return cmd_install()
+    if cmd == "uninstall":
+        return cmd_uninstall()
+    if cmd == "mcp":
+        return cmd_mcp()
+    if cmd == "login":
         return cmd_login(args.provider, verify=not args.no_verify)
-    if args.command == "logout":
+    if cmd == "logout":
         return cmd_logout(args.provider)
-    if args.command == "status":
+    if cmd == "status":
         return cmd_status()
-    if args.command == "models":
+    if cmd == "models":
         return cmd_models(refresh=args.refresh)
-    if args.command == "run":
+    if cmd == "run":
         return cmd_run(args)
-    if args.command == "eval":
+    if cmd == "eval":
         return cmd_eval(args)
-    if args.command == "stats":
+    if cmd == "stats":
         return cmd_stats()
-    if args.command == "lessons":
+    if cmd == "lessons":
         return cmd_lessons(prune=args.prune)
     return 2
 
