@@ -1,0 +1,41 @@
+name: Bug report
+description: Something did not work the way the README says it should.
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Bicameral version
+      description: Output of `bicameral --version`, or the commit sha.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, operating system, and the Editor backend (Codex CLI, headless Claude Code, or an API model).
+      placeholder: Python 3.12, Windows 11, Codex CLI
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command or `/bicameral` invocation.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What happened instead. Paste the output and any relevant lines from the run's log under `.bicameral/`.
+      render: text
+    validations:
+      required: true
