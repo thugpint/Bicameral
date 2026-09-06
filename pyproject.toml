@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "devilz06" }]
-keywords = ["llm", "agents", "coding-agent", "orchestration", "anthropic", "openai", "claude-code", "mcp", "tui"]
+keywords = ["llm", "ai-agents", "coding-agent", "ai-coding-assistant", "multi-agent", "orchestration", "anthropic", "claude", "claude-code", "openai", "codex", "gpt-5", "mcp", "model-context-protocol", "self-improving", "bandit", "developer-tools"]
 dependencies = [
   "anthropic>=1.0",
   "openai>=1.70",
@@ -27,13 +27,15 @@ bicameral = "bicameral.cli:main"
 bicameral-mcp = "bicameral.mcp_server:main"
 
 [project.urls]
-Repository = "https://github.com/devilz06/Bicameral"
+Repository = "https://github.com/Devilz06/Bicameral"
+Homepage = "https://github.com/Devilz06/Bicameral"
+Issues = "https://github.com/Devilz06/Bicameral/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-bicameral = ["evals/tasks/**/*", "skill/*.md", "tui/*.tcss"]
+bicameral = ["evals/tasks/**/*", "skill/*.md", "tui/*.tcss", "gui/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

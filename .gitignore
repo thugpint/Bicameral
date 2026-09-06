@@ -9,3 +9,6 @@ dist/
 .bicameral/
 *.db
 .env
+.playwright-mcp/
+HANDOFF.md
+.claude/settings.local.json

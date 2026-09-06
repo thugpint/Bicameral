@@ -1,7 +1,8 @@
 """Command-line entry point.
 
-`bicameral` with no arguments opens the TUI. Subcommands cover everything the
-TUI does for scripting, plus `mcp` (the server Claude Code talks to).
+`bicameral` with no arguments opens the GUI in your browser. `bicameral tui` is
+the terminal version. Subcommands cover everything the GUI does for scripting,
+plus `mcp` (the server Claude Code talks to).
 """
 
 from __future__ import annotations
@@ -214,6 +215,13 @@ def cmd_lessons(prune: bool = False) -> int:
     return 0
 
 
+def cmd_gui(path: str | None, port: int, no_browser: bool) -> int:
+    from .gui import serve
+
+    serve(path, port=port, open_browser=not no_browser)
+    return 0
+
+
 def cmd_tui(path: str | None) -> int:
     from .tui import run
 
@@ -238,11 +246,16 @@ def _add_model_flags(p: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="bicameral", description="Self-improving architect/editor coding orchestrator. No arguments opens the TUI.")
+    p = argparse.ArgumentParser(prog="bicameral", description="Self-improving architect/editor coding orchestrator. No arguments opens the GUI.")
     p.add_argument("--version", action="version", version=f"bicameral {__version__}")
     sub = p.add_subparsers(dest="command")
 
-    s = sub.add_parser("tui", help="open the TUI")
+    s = sub.add_parser("gui", help="open the GUI in your browser (the default)")
+    s.add_argument("--path", default=None, help="repository to preselect in Run a task")
+    s.add_argument("--port", type=int, default=0, help="port to listen on (default: a free port)")
+    s.add_argument("--no-browser", action="store_true", help="print the URL instead of opening a browser")
+
+    s = sub.add_parser("tui", help="open the terminal UI instead of the GUI")
     s.add_argument("--path", default=None, help="repository to preselect in the Run tab")
 
     sub.add_parser("install", help="install the /bicameral skill and MCP server into Claude Code")
@@ -288,7 +301,9 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cmd = args.command
     if cmd is None:
-        return cmd_tui(None)
+        return cmd_gui(None, 0, False)
+    if cmd == "gui":
+        return cmd_gui(args.path, args.port, args.no_browser)
     if cmd == "tui":
         return cmd_tui(args.path)
     if cmd == "install":

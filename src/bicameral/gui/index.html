@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bicameral</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><clipPath id="l"><rect width="122" height="256"/></clipPath><clipPath id="r"><rect x="134" width="122" height="256"/></clipPath><circle cx="128" cy="128" r="104" fill="%237c3aed" clip-path="url(%23l)"/><circle cx="128" cy="128" r="104" fill="%230891b2" clip-path="url(%23r)"/><rect x="116" y="118" width="24" height="20" rx="10" fill="%23fff"/></svg>'>
+<style>
+:root{
+  --bg:#0a0912;--bg2:#100e1f;--surface:rgba(255,255,255,.045);--surface2:rgba(255,255,255,.08);--line:rgba(255,255,255,.09);
+  --text:#ece9fb;--muted:#9a94bf;--dim:#6f6a92;
+  --violet:#a78bfa;--violet2:#7c3aed;--cyan:#22d3ee;--cyan2:#0891b2;--pink:#f472b6;--green:#34d399;--amber:#fbbf24;--red:#fb7185;
+  --r:20px;--r2:14px;--shadow:0 20px 60px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;background:
+  radial-gradient(900px 600px at 8% -10%,rgba(124,58,237,.28),transparent 60%),
+  radial-gradient(900px 600px at 100% 0%,rgba(34,211,238,.16),transparent 60%),
+  radial-gradient(700px 500px at 60% 110%,rgba(244,114,182,.10),transparent 60%),
+  var(--bg)}
+a{color:var(--cyan)}
+code,kbd,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:disabled{cursor:not-allowed;opacity:.5}
+input,textarea,select{font:inherit;color:var(--text);background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:var(--r2);padding:14px 16px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus,textarea:focus,select:focus{border-color:var(--violet);box-shadow:0 0 0 4px rgba(167,139,250,.18)}
+select{appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%239a94bf" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>');background-repeat:no-repeat;background-position:right 14px center;padding-right:44px}
+select option{background:#151329}
+textarea{resize:vertical;min-height:120px}
+::selection{background:rgba(167,139,250,.35)}
+
+.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
+header{display:flex;align-items:center;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit}
+.brand svg{width:48px;height:48px;filter:drop-shadow(0 6px 18px rgba(124,58,237,.45))}
+.brand h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.02em}
+.brand small{display:block;color:var(--muted);font-weight:500;font-size:13px;letter-spacing:.02em}
+nav{margin-left:auto;display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);padding:6px;border-radius:999px;flex-wrap:wrap}
+nav button{padding:10px 18px;border-radius:999px;font-weight:600;color:var(--muted);transition:all .15s;display:flex;align-items:center;gap:8px}
+nav button:hover{color:var(--text);background:var(--surface2)}
+nav button.active{color:#0b0a14;background:linear-gradient(135deg,var(--violet),var(--cyan))}
+nav .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 3px rgba(251,191,36,.25)}
+
+.view{display:none;animation:fade .25s ease}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.hero{text-align:center;padding:24px 0 30px}
+.hero h2{font-size:clamp(34px,5vw,54px);font-weight:800;letter-spacing:-.03em;margin:0 0 10px;line-height:1.05}
+.hero h2 span{background:linear-gradient(90deg,var(--violet),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--muted);font-size:18px;max-width:640px;margin:0 auto}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:24px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.06),transparent 40%)}
+.card h3{margin:0 0 6px;font-size:19px;font-weight:700;display:flex;align-items:center;gap:10px}
+.card p{margin:0;color:var(--muted)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media (max-width:860px){.steps{grid-template-columns:1fr}}
+.step{display:flex;flex-direction:column;gap:14px;min-height:250px}
+.step .num{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:17px;background:var(--surface2);color:var(--muted);border:1px solid var(--line)}
+.step.done .num{background:linear-gradient(135deg,var(--green),#10b981);color:#04231a;border-color:transparent}
+.step.done{border-color:rgba(52,211,153,.35)}
+.step .grow{flex:1}
+.step .actions{display:flex;flex-direction:column;gap:10px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--surface2);color:var(--muted);border:1px solid var(--line);width:max-content;max-width:100%}
+.pill.ok{color:var(--green);background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.3)}
+.pill.warn{color:var(--amber);background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.3)}
+.pill.bad{color:var(--red);background:rgba(251,113,133,.12);border-color:rgba(251,113,133,.3)}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill.wait .dot{animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.2}}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:15px 24px;border-radius:var(--r2);font-weight:700;font-size:16px;transition:transform .12s,box-shadow .12s,filter .12s;white-space:nowrap;text-decoration:none}
+.btn.big{padding:18px 28px;font-size:18px;width:100%}
+.btn.primary{color:#0b0a14;background:linear-gradient(135deg,var(--violet),var(--cyan));box-shadow:0 10px 30px rgba(124,58,237,.35)}
+.btn.primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 16px 40px rgba(124,58,237,.45);filter:brightness(1.05)}
+.btn.ghost{background:var(--surface2);border:1px solid var(--line);color:var(--text)}
+.btn.ghost:hover:not(:disabled){background:rgba(255,255,255,.12)}
+.btn.good{color:#04231a;background:linear-gradient(135deg,var(--green),#10b981)}
+.btn.danger{color:var(--red);background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.3)}
+.btn.sm{padding:9px 14px;font-size:14px;border-radius:10px}
+.btn .spin{width:16px;height:16px;border:2.5px solid rgba(0,0,0,.25);border-top-color:#0b0a14;border-radius:50%;animation:rot .7s linear infinite}
+.btn.ghost .spin{border-color:rgba(255,255,255,.2);border-top-color:#fff}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+.ready{margin-top:18px;padding:28px;border-radius:var(--r);border:1px solid rgba(52,211,153,.35);background:linear-gradient(135deg,rgba(52,211,153,.14),rgba(34,211,238,.08));text-align:center;display:none}
+.ready.show{display:block;animation:pop .4s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
+.ready h3{font-size:28px;margin:0 0 6px;justify-content:center}
+.ready .cmd{display:inline-flex;align-items:center;gap:12px;margin:16px 0 8px;padding:14px 18px;border-radius:14px;background:rgba(0,0,0,.4);border:1px solid var(--line);font-size:18px}
+.ready .cmd code{color:var(--cyan)}
+.chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.chip{padding:7px 12px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);color:var(--muted);font-size:13px;transition:all .15s}
+.chip:hover{color:var(--text);border-color:var(--violet)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.field label{font-weight:600;font-size:14px;color:var(--muted);display:flex;justify-content:space-between}
+.field label b{color:var(--text)}
+.help{color:var(--dim);font-size:13px}
+.switch{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+.switch input{display:none}
+.switch .track{width:48px;height:28px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);position:relative;transition:background .15s;flex:none}
+.switch .track::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch input:checked+.track{background:linear-gradient(135deg,var(--violet),var(--cyan));border-color:transparent}
+.switch input:checked+.track::after{transform:translateX(20px)}
+
+.console{margin-top:16px;background:rgba(0,0,0,.45);border:1px solid var(--line);border-radius:var(--r2);padding:16px;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.6;max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#cfcbe6;display:none}
+.console.show{display:block}
+.console .ok{color:var(--green)}.console .bad{color:var(--red)}.console .hi{color:var(--violet)}
+.result{margin-top:16px;padding:20px;border-radius:var(--r2);display:none}
+.result.show{display:block}
+.result.ok{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35)}
+.result.bad{background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.35)}
+.result h4{margin:0 0 8px;font-size:20px}
+.result ul{margin:8px 0 0;padding-left:20px;color:var(--muted)}
+
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+@media (max-width:860px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px}
+.tile .cap{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tile .val{font-size:36px;font-weight:800;letter-spacing:-.02em;margin:4px 0 0;line-height:1.1}
+.tile .sub{font-size:13px;color:var(--dim);margin-top:4px}
+.tile.v .val{color:var(--violet)}.tile.c .val{color:var(--cyan)}.tile.g .val{color:var(--green)}.tile.p .val{color:var(--pink)}
+.bars{display:flex;gap:4px;align-items:flex-end;height:56px;padding:6px 0}
+.bars i{flex:1;border-radius:4px 4px 0 0;min-width:6px;max-width:26px;background:var(--red);opacity:.7;height:35%}
+.bars i.ok{background:var(--green);height:100%;opacity:.95}
+.empty{color:var(--dim);padding:24px;text-align:center;border:1px dashed var(--line);border-radius:var(--r2)}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid var(--line)}
+td{padding:12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+tr.row{cursor:pointer;transition:background .12s}
+tr.row:hover{background:var(--surface2)}
+.tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--surface2);color:var(--muted)}
+.tag.ok{color:var(--green);background:rgba(52,211,153,.14)}.tag.bad{color:var(--red);background:rgba(251,113,133,.14)}.tag.v{color:var(--violet);background:rgba(167,139,250,.16)}.tag.c{color:var(--cyan);background:rgba(34,211,238,.14)}
+.detail{background:rgba(0,0,0,.3);border-radius:12px;padding:14px 16px;margin:6px 0 8px}
+.detail .st{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.detail .st:last-child{border:0}
+.detail .fb{color:var(--dim);font-size:13px;margin-top:4px}
+.section{margin:26px 0 12px;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.lesson{display:flex;gap:14px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);margin-bottom:10px;align-items:flex-start}
+.lesson .score{font-weight:800;font-size:18px;min-width:56px;text-align:center;padding:6px 0;border-radius:10px;background:var(--surface2)}
+.lesson .score.up{color:var(--green)}.lesson .score.down{color:var(--red)}
+.lesson .meta{font-size:12px;color:var(--dim);margin-top:4px}
+details{margin-top:14px}
+summary{cursor:pointer;color:var(--muted);font-weight:600;padding:8px 0;list-style:none;display:flex;align-items:center;gap:8px}
+summary::before{content:"▸";transition:transform .15s;color:var(--dim)}
+details[open] summary::before{transform:rotate(90deg)}
+pre.report{background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:var(--r2);padding:14px;font-size:12.5px;overflow:auto;color:#cfcbe6}
+.toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;z-index:50}
+.toast{padding:14px 18px;border-radius:14px;background:#1b1834;border:1px solid var(--line);box-shadow:var(--shadow);max-width:380px;animation:fade .2s;font-weight:500}
+.toast.ok{border-color:rgba(52,211,153,.4)}.toast.bad{border-color:rgba(251,113,133,.45)}
+footer{margin-top:40px;color:var(--dim);font-size:13px;text-align:center}
+footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a class="brand" href="#" onclick="show('home');return false">
+    <svg viewBox="0 0 256 256" aria-hidden="true">
+      <defs>
+        <linearGradient id="gA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
+        <linearGradient id="gE" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#0891b2"/></linearGradient>
+        <linearGradient id="gB" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+        <clipPath id="cl"><rect x="0" y="0" width="122" height="256"/></clipPath>
+        <clipPath id="cr"><rect x="134" y="0" width="122" height="256"/></clipPath>
+      </defs>
+      <g clip-path="url(#cl)"><circle cx="128" cy="128" r="104" fill="url(#gA)"/><g stroke="#fff" stroke-width="7" stroke-linecap="round" fill="none"><path d="M84 84 V172"/><path d="M84 100 H112"/><path d="M84 128 H112"/><path d="M84 156 H112"/></g><g fill="#fff"><circle cx="84" cy="84" r="9"/><circle cx="112" cy="100" r="6"/><circle cx="112" cy="128" r="6"/><circle cx="112" cy="156" r="6"/></g></g>
+      <g clip-path="url(#cr)"><circle cx="128" cy="128" r="104" fill="url(#gE)"/><g stroke="#fff" stroke-width="8" stroke-linecap="round"><path d="M150 100 H196"/><path d="M150 128 H180"/><path d="M150 156 H196"/></g><g stroke="#0b1220" stroke-width="5" stroke-linecap="round" opacity=".55"><path d="M160 90 V110"/><path d="M150 128 H180"/></g></g>
+      <rect x="116" y="118" width="24" height="20" rx="10" fill="url(#gB)"/><circle cx="128" cy="128" r="5" fill="#fff"/>
+    </svg>
+    <div><h1>Bicameral</h1><small id="ver">two minds · one diff</small></div>
+  </a>
+  <nav id="nav">
+    <button data-v="home" class="active">🏠 Home</button>
+    <button data-v="run">⚡ Run a task <span class="dot" id="run-dot" hidden></span></button>
+    <button data-v="history">📜 History</button>
+    <button data-v="brain">🧠 Brain</button>
+    <button data-v="settings">⚙️ Settings</button>
+  </nav>
+</header>
+
+<!-- HOME -->
+<section class="view active" id="v-home">
+  <div class="hero">
+    <h2>Two minds. <span>One diff.</span></h2>
+    <p>Claude plans the work and checks it. A second AI writes the code. Bicameral remembers what worked, so it gets better every time.</p>
+  </div>
+  <div class="steps">
+    <div class="card step" id="s1">
+      <div class="num">1</div>
+      <h3>Sign in to Claude</h3>
+      <p>This is the planner. It uses your normal Claude account. No API key.</p>
+      <div class="grow"></div>
+      <div id="s1-pill" class="pill"><span class="dot"></span>checking…</div>
+      <div class="actions" id="s1-actions"></div>
+    </div>
+    <div class="card step" id="s2">
+      <div class="num">2</div>
+      <h3>Add a second brain <span class="tag">optional</span></h3>
+      <p>The coder. Sign in with ChatGPT to use GPT-5 Codex, or skip this and Claude does both jobs.</p>
+      <div class="grow"></div>
+      <div id="s2-pill" class="pill"><span class="dot"></span>checking…</div>
+      <div class="actions" id="s2-actions"></div>
+    </div>
+    <div class="card step" id="s3">
+      <div class="num">3</div>
+      <h3>Connect to Claude Code</h3>
+      <p>Adds the <code>/bicameral</code> command to Claude Code. One click, takes a second.</p>
+      <div class="grow"></div>
+      <div id="s3-pill" class="pill"><span class="dot"></span>checking…</div>
+      <div class="actions" id="s3-actions"></div>
+    </div>
+  </div>
+  <div class="ready" id="ready">
+    <h3>🎉 You're all set</h3>
+    <p>Restart Claude Code, open any project, and type this. Change the words after the slash to whatever you want done.</p>
+    <div class="cmd"><code id="cmd-text">/bicameral fix the failing test</code><button class="btn ghost sm" onclick="copyCmd()">Copy</button></div>
+    <div class="chips">
+      <button class="chip" onclick="setCmd('/bicameral fix the failing test')">fix the failing test</button>
+      <button class="chip" onclick="setCmd('/bicameral add a --dry-run flag to the export command')">add a --dry-run flag</button>
+      <button class="chip" onclick="setCmd('/bicameral write tests for the parser')">write tests for the parser</button>
+      <button class="chip" onclick="setCmd('/bicameral rename User to Account everywhere')">rename a class everywhere</button>
+    </div>
+    <p class="help" style="margin-top:14px">Claude will ask which coder to use, plan the steps, and show you every change before it is accepted.</p>
+  </div>
+</section>
+
+<!-- RUN -->
+<section class="view" id="v-run">
+  <div class="card">
+    <h3>⚡ Run a task from here</h3>
+    <p style="margin-bottom:20px">Same engine as <code>/bicameral</code>, but you pick both models and it runs right on this page. Great for trying it on a small project.</p>
+    <div class="field">
+      <label><b>What do you want done?</b></label>
+      <textarea id="run-task" placeholder="e.g. The median() function gives the wrong answer for lists with an even number of items. Fix it so the tests pass."></textarea>
+    </div>
+    <div class="field">
+      <label><b>Which folder?</b><span class="help">the project with the code in it</span></label>
+      <input id="run-path" placeholder="C:\path\to\project">
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label><b>Planner</b><span class="help">thinks, plans, reviews</span></label>
+        <select id="run-arch"></select>
+      </div>
+      <div class="field">
+        <label><b>Coder</b><span class="help">writes the changes</span></label>
+        <select id="run-editor"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label class="switch"><input type="checkbox" id="run-learning" checked><span class="track"></span><span><b>Remember what works</b> <span class="help">(turn off only to measure a baseline)</span></span></label>
+    </div>
+    <button class="btn primary big" id="btn-run" onclick="startRun()">🚀 Go</button>
+    <div class="console" id="run-console"></div>
+    <div class="result" id="run-result"></div>
+  </div>
+</section>
+
+<!-- HISTORY -->
+<section class="view" id="v-history">
+  <div class="card">
+    <h3>📜 Everything Bicameral has done</h3>
+    <p>Click a row to see each step, who did it, and how many tries it took.</p>
+    <div id="history" style="margin-top:16px"></div>
+  </div>
+</section>
+
+<!-- BRAIN -->
+<section class="view" id="v-brain">
+  <div class="tiles">
+    <div class="tile v"><div class="cap">Tasks done</div><div class="val" id="t-runs">0</div><div class="sub" id="t-runs-sub">nothing yet</div></div>
+    <div class="tile g"><div class="cap">Success · remembering</div><div class="val" id="t-on">–</div><div class="sub" id="t-on-sub"></div></div>
+    <div class="tile c"><div class="cap">Success · not remembering</div><div class="val" id="t-off">–</div><div class="sub" id="t-off-sub"></div></div>
+    <div class="tile p"><div class="cap">API spend</div><div class="val" id="t-cost">$0.00</div><div class="sub">account sign-ins cost $0 here</div></div>
+  </div>
+  <div class="card">
+    <h3>Recent outcomes</h3>
+    <p>Each bar is one task. Tall green = it worked.</p>
+    <div class="bars" id="bars"></div>
+    <div class="section">Who is best at what</div>
+    <div id="routing"></div>
+    <div class="section">Lessons it learned <button class="btn danger sm" onclick="post('prune')">Forget the bad ones</button></div>
+    <div id="lessons"></div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section class="view" id="v-settings">
+  <div class="grid2">
+    <div class="card">
+      <h3>Favourite coder</h3>
+      <p>Claude will suggest this one first when you run <code>/bicameral</code>.</p>
+      <div class="field" style="margin-top:14px"><select id="def-editor"></select></div>
+      <button class="btn primary" onclick="saveDefault()">Save</button>
+    </div>
+    <div class="card">
+      <h3>Claude Code link</h3>
+      <p>Re-run the connection if Claude Code says it can't find <code>/bicameral</code>.</p>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn ghost" onclick="post('install')">Connect again</button>
+        <button class="btn danger" onclick="post('uninstall')">Disconnect</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <h3>API keys <span class="tag">optional</span></h3>
+    <p>Only if you want to pay per token instead of using your accounts. Keys stay on this computer in <code id="home-path"></code>.</p>
+    <div class="grid2" style="margin-top:14px">
+      <div class="field"><label><b>Provider</b></label><select id="key-provider"><option value="anthropic">Anthropic</option><option value="openai" selected>OpenAI</option></select></div>
+      <div class="field"><label><b>Key</b></label><input id="key-input" type="password" placeholder="paste it here"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn primary" onclick="saveKey()">Save key</button>
+      <button class="btn ghost" onclick="post('key/remove',{provider:$('key-provider').value})">Remove key</button>
+    </div>
+    <div id="backends" style="margin-top:18px"></div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <h3>Prove it learns <span class="tag">advanced</span></h3>
+    <p>Runs the built-in test tasks. Do one round with remembering off (baseline), then rounds with it on, and compare.</p>
+    <div class="grid2" style="margin-top:14px">
+      <div class="field"><label><b>Planner</b></label><select id="eval-arch"></select></div>
+      <div class="field"><label><b>Coder</b></label><select id="eval-editor"></select></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label><b>Rounds</b></label><input id="eval-runs" type="number" min="1" value="1"></div>
+      <div class="field"><label><b>&nbsp;</b></label><label class="switch"><input type="checkbox" id="eval-baseline"><span class="track"></span><span><b>Baseline</b> <span class="help">(remembering off)</span></span></label></div>
+    </div>
+    <button class="btn primary" id="btn-eval" onclick="startEval()">Run the tests</button>
+    <div class="console" id="eval-console"></div>
+    <details><summary>Report</summary><pre class="report" id="eval-report"></pre></details>
+  </div>
+  <footer>Bicameral v<span id="ver2"></span> · data lives in <span class="mono" id="home-path2"></span> · <a href="https://github.com/Devilz06/Bicameral" target="_blank" rel="noopener">GitHub</a></footer>
+</section>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = id => document.getElementById(id);
+let S = null, waitingFor = null, waitUntil = 0, runSince = 0, evalSince = 0, lastRuns = '', polling = {run: false, eval: false};
+
+const H = {'Content-Type': 'application/json', 'X-Bicameral-Token': TOKEN};
+async function api(path, opts) {
+  const r = await fetch(path, {headers: H, ...opts});
+  return r.json();
+}
+async function post(action, body) {
+  const out = await api('/api/' + action, {method: 'POST', body: JSON.stringify(body || {})});
+  if (out.messages) out.messages.forEach(m => toast(m, 'ok'));
+  else if (out.message) toast(out.message, out.ok ? 'ok' : 'bad');
+  await refresh(true);
+  return out;
+}
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (kind || '');
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// -- navigation --------------------------------------------------------------
+function show(v) {
+  document.querySelectorAll('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  location.hash = v;
+}
+document.querySelectorAll('#nav button').forEach(b => b.onclick = () => show(b.dataset.v));
+
+// -- state ----------------------------------------------------------------------
+async function refresh(fresh) {
+  try { S = await api('/api/state' + (fresh ? '?fresh=1' : '')); }
+  catch (e) { toast('Lost the connection to Bicameral. Is the terminal still open?', 'bad'); return; }
+  render();
+}
+function backend(id) { return S.backends.find(b => b.id === id) || {}; }
+
+function render() {
+  $('ver').textContent = 'v' + S.version + ' · two minds · one diff';
+  $('ver2').textContent = S.version;
+  $('home-path').textContent = S.home; $('home-path2').textContent = S.home;
+  renderSetup(); renderModels(); renderBrain(); renderBackends();
+  const runsKey = JSON.stringify(S.runs);
+  if (runsKey !== lastRuns) { lastRuns = runsKey; renderHistory(); }
+  $('eval-report').textContent = S.eval_report;
+  $('run-dot').hidden = !S.busy.run;
+  if (!$('run-path').value) $('run-path').value = S.workspace;
+}
+
+function step(n, done, pill, actions) {
+  const el = $('s' + n);
+  el.classList.toggle('done', done);
+  el.querySelector('.num').textContent = done ? '✓' : String(n);
+  const p = $('s' + n + '-pill');
+  p.className = 'pill ' + pill.kind;
+  p.innerHTML = '<span class="dot"></span>' + esc(pill.text);
+  $('s' + n + '-actions').innerHTML = actions.join('');
+}
+function renderSetup() {
+  const claude = backend('claude-cli'), codex = backend('codex-cli'), inst = S.install, tools = S.tools;
+  const waiting = kind => waitingFor === kind && Date.now() < waitUntil;
+
+  if (!tools.claude) step(1, false, {kind: 'bad', text: 'Claude Code is not installed'}, [
+    `<a class="btn primary big" href="https://claude.com/claude-code" target="_blank" rel="noopener">Get Claude Code</a>`,
+    `<span class="help">Install it, sign in once, then come back here.</span>`]);
+  else if (claude.available) step(1, true, {kind: 'ok', text: 'Signed in · ' + claude.detail}, []);
+  else if (waiting('claude')) step(1, false, {kind: 'warn wait', text: 'Finish signing in in the window that opened…'}, [
+    `<button class="btn ghost big" onclick="login('claude')">Open it again</button>`]);
+  else step(1, false, {kind: 'warn', text: 'Not signed in'}, [
+    `<button class="btn primary big" onclick="login('claude')">Sign in to Claude</button>`]);
+
+  if (codex.available) step(2, true, {kind: 'ok', text: 'ChatGPT signed in · ' + codex.detail}, []);
+  else if (waiting('codex')) step(2, false, {kind: 'warn wait', text: 'Finish signing in in the window that opened…'}, [
+    `<button class="btn ghost big" onclick="login('codex')">Open it again</button>`]);
+  else if (tools.codex) step(2, false, {kind: 'warn', text: 'Codex installed, not signed in'}, [
+    `<button class="btn primary big" onclick="login('codex')">Sign in to ChatGPT</button>`,
+    `<span class="help">Skip this and Claude does both jobs.</span>`]);
+  else if (waiting('codex-install')) step(2, false, {kind: 'warn wait', text: 'Installing Codex in the window that opened…'}, []);
+  else if (tools.npm) step(2, false, {kind: '', text: 'Codex CLI not installed'}, [
+    `<button class="btn primary big" onclick="login('codex-install')">Install Codex (1 click)</button>`,
+    `<span class="help">Then a “Sign in to ChatGPT” button appears here. Skip this and Claude does both jobs.</span>`]);
+  else step(2, false, {kind: '', text: 'Needs Node.js first'}, [
+    `<a class="btn ghost big" href="https://nodejs.org" target="_blank" rel="noopener">Get Node.js</a>`,
+    `<span class="help">Optional. Skip this and Claude does both jobs.</span>`]);
+
+  const connected = inst.skill && inst.mcp;
+  if (!tools.claude) step(3, false, {kind: '', text: 'Waiting for step 1'}, []);
+  else if (connected) step(3, true, {kind: 'ok', text: 'Connected · /bicameral is ready'}, []);
+  else step(3, false, {kind: 'warn', text: inst.skill || inst.mcp ? 'Half connected' : 'Not connected'}, [
+    `<button class="btn primary big" onclick="post('install')">Connect</button>`]);
+
+  $('ready').classList.toggle('show', claude.available && connected);
+}
+async function login(which) {
+  const out = await api('/api/login', {method: 'POST', body: JSON.stringify({which})});
+  toast(out.message, out.ok ? 'ok' : 'bad');
+  if (out.ok) { waitingFor = which; waitUntil = Date.now() + 4 * 60 * 1000; }
+  render();
+}
+function setCmd(t) { $('cmd-text').textContent = t; }
+function copyCmd() { navigator.clipboard.writeText($('cmd-text').textContent).then(() => toast('Copied. Paste it into Claude Code.', 'ok')); }
+
+// -- models -------------------------------------------------------------------------
+function fillSelect(id, prefer, want) {
+  const sel = $(id), cur = sel.value;
+  const avail = S.models.filter(m => m.available);
+  sel.innerHTML = avail.length ? '' : '<option value="">sign in first (Home)</option>';
+  avail.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = m.display + (m.account ? '  · your account' : m.price ? `  · $${m.price[0]}/$${m.price[1]} per 1M` : '');
+    sel.appendChild(o);
+  });
+  const ids = avail.map(m => m.id);
+  const pick = [cur, want, ...prefer].find(x => x && ids.includes(x));
+  if (pick) sel.value = pick;
+}
+function renderModels() {
+  const A = ['claude:opus', 'claude-opus-5', 'claude-fable-5-1', 'claude:sonnet', 'gpt-5', 'o3'];
+  const E = ['codex:gpt-5-codex', 'claude:sonnet', 'claude-sonnet-5', 'gpt-5-codex', 'claude:opus'];
+  fillSelect('run-arch', A, S.config.last_architect); fillSelect('eval-arch', A, S.config.last_architect);
+  fillSelect('run-editor', E, S.config.last_editor); fillSelect('eval-editor', E, S.config.last_editor);
+  fillSelect('def-editor', E, S.config.last_editor);
+}
+function saveDefault() { post('defaults', {editor: $('def-editor').value}); }
+async function saveKey() {
+  const key = $('key-input').value; $('key-input').value = '';
+  await post('key', {provider: $('key-provider').value, key});
+}
+function renderBackends() {
+  $('backends').innerHTML = '<table><tr><th>Backend</th><th>Status</th><th>Detail</th></tr>' + S.backends.map(b =>
+    `<tr><td>${esc(b.label)}</td><td><span class="tag ${b.available ? 'ok' : ''}">${b.available ? 'ready' : 'off'}</span></td><td class="help">${esc(b.detail)}${b.login_hint ? '<br>' + esc(b.login_hint) : ''}</td></tr>`).join('') + '</table>';
+}
+
+// -- run --------------------------------------------------------------------------------
+async function startRun() {
+  const body = {task: $('run-task').value, path: $('run-path').value, architect: $('run-arch').value, editor: $('run-editor').value, learning: $('run-learning').checked};
+  const out = await api('/api/run', {method: 'POST', body: JSON.stringify(body)});
+  if (!out.ok) { toast(out.message, 'bad'); return; }
+  runSince = 0; $('run-console').textContent = ''; $('run-console').classList.add('show'); $('run-result').className = 'result';
+  $('btn-run').disabled = true; $('btn-run').innerHTML = '<span class="spin"></span> Working…';
+  pollJob('run');
+}
+async function startEval() {
+  const body = {architect: $('eval-arch').value, editor: $('eval-editor').value, baseline: $('eval-baseline').checked, runs: +$('eval-runs').value || 1};
+  const out = await api('/api/eval', {method: 'POST', body: JSON.stringify(body)});
+  if (!out.ok) { toast(out.message, 'bad'); return; }
+  evalSince = 0; $('eval-console').textContent = ''; $('eval-console').classList.add('show');
+  $('btn-eval').disabled = true; $('btn-eval').innerHTML = '<span class="spin"></span> Running…';
+  pollJob('eval');
+}
+function colorize(line) {
+  const e = esc(line);
+  if (/SUCCESS|PASS|accepted|-> ok|verified/i.test(line)) return `<span class="ok">${e}</span>`;
+  if (/FAIL|reject|error|aborted/i.test(line)) return `<span class="bad">${e}</span>`;
+  if (/^Step |^\[/.test(line)) return `<span class="hi">${e}</span>`;
+  return e;
+}
+async function pollJob(which) {
+  polling[which] = true;
+  const since = which === 'run' ? runSince : evalSince;
+  const j = await api(`/api/log?which=${which}&since=${since}`);
+  const con = $(which + '-console');
+  if (j.lines.length) { con.insertAdjacentHTML('beforeend', j.lines.map(colorize).join('\n') + '\n'); con.scrollTop = con.scrollHeight; }
+  if (which === 'run') runSince = j.total; else evalSince = j.total;
+  if (j.running) { setTimeout(() => pollJob(which), 700); return; }
+  polling[which] = false;
+  if (which === 'run') {
+    $('btn-run').disabled = false; $('btn-run').textContent = '🚀 Go';
+    const r = j.result || {};
+    const el = $('run-result');
+    el.className = 'result show ' + (r.success ? 'ok' : 'bad');
+    el.innerHTML = `<h4>${r.success ? '✅ Done. The tests pass.' : '❌ It did not get there this time.'}</h4>` +
+      (r.failure_reason ? `<p class="help">${esc(r.failure_reason)}</p>` : '') +
+      `<ul>${(r.steps || []).map(s => `<li>${s.ok ? '✓' : '✗'} ${esc(s.title)} <span class="help">· ${esc(s.role)} (${esc(s.model)}), ${s.attempts} ${s.attempts === 1 ? 'try' : 'tries'}</span></li>`).join('')}</ul>` +
+      ((r.lessons || []).length ? `<p class="help" style="margin-top:10px">Learned: ${r.lessons.map(esc).join(' · ')}</p>` : '') +
+      `<p class="help" style="margin-top:8px">$${(r.cost || 0).toFixed(4)} · ${Math.round(r.duration || 0)}s</p>`;
+  } else {
+    $('btn-eval').disabled = false; $('btn-eval').textContent = 'Run the tests';
+    const r = j.result || {};
+    toast(`Tests finished: ${r.passed}/${r.total} passed.`, r.success ? 'ok' : 'bad');
+  }
+  refresh();
+}
+
+// -- history --------------------------------------------------------------------------
+function renderHistory() {
+  const h = $('history');
+  if (!S.runs.length) { h.innerHTML = '<div class="empty">Nothing yet. Run <code>/bicameral</code> in Claude Code, or use “Run a task”.</div>'; return; }
+  h.innerHTML = '<table><tr><th>When</th><th>Result</th><th>Task</th><th>Coder</th><th>Steps</th><th>Cost</th></tr>' + S.runs.map(r => {
+    const tag = r.success === 1 ? '<span class="tag ok">worked</span>' : r.success === 0 ? '<span class="tag bad">failed</span>' : '<span class="tag">running</span>';
+    return `<tr class="row" onclick="toggleRun(${r.id}, this)"><td class="help">${esc(r.when)}</td><td>${tag}</td><td>${esc(r.task.slice(0, 90))}${r.kind ? ` <span class="tag">${esc(r.kind)}</span>` : ''}</td><td class="help">${esc(r.editor)}</td><td>${r.steps_ok}/${r.steps_total}</td><td class="help">$${r.cost.toFixed(3)}</td></tr><tr id="d-${r.id}" hidden><td colspan="6"></td></tr>`;
+  }).join('') + '</table>';
+}
+async function toggleRun(id, row) {
+  const d = $('d-' + id);
+  if (!d.hidden) { d.hidden = true; return; }
+  const r = S.runs.find(x => x.id === id);
+  const det = await api('/api/run/' + id);
+  d.firstChild.innerHTML = `<div class="detail">${r.summary ? `<p class="help" style="margin:0 0 8px">${esc(r.summary)}</p>` : ''}` +
+    (det.steps.length ? det.steps.map(s => `<div class="st"><span class="tag ${s.accepted ? 'ok' : 'bad'}">${s.accepted ? '✓' : '✗'}</span><div><b>${s.idx + 1}. ${esc(s.title)}</b> <span class="tag ${s.role === 'editor' ? 'c' : 'v'}">${esc(s.role)}</span> <span class="help">${esc(s.model)} · ${s.attempts} ${s.attempts === 1 ? 'try' : 'tries'}${s.verified ? ' · tests passed' : ''}</span>${s.feedback ? `<div class="fb">${esc(s.feedback.slice(0, 400))}</div>` : ''}</div></div>`).join('') : '<span class="help">no step details recorded</span>') + '</div>';
+  d.hidden = false;
+}
+
+// -- brain ------------------------------------------------------------------------------
+function pct(o) { return o.n ? Math.round(100 * o.ok / o.n) + '%' : '–'; }
+function renderBrain() {
+  const st = S.stats;
+  $('t-runs').textContent = st.runs; $('t-runs-sub').textContent = st.lessons + (st.lessons === 1 ? ' lesson stored' : ' lessons stored');
+  $('t-on').textContent = pct(st.on); $('t-on-sub').textContent = `${st.on.ok} of ${st.on.n} tasks`;
+  $('t-off').textContent = pct(st.off); $('t-off-sub').textContent = `${st.off.ok} of ${st.off.n} tasks`;
+  $('t-cost').textContent = '$' + st.cost.toFixed(2);
+  $('bars').innerHTML = st.recent.length ? st.recent.map(x => `<i class="${x ? 'ok' : ''}"></i>`).join('') : '<span class="help">no tasks yet</span>';
+  $('routing').innerHTML = st.routing.length
+    ? '<table><tr><th>Kind of step</th><th>Model</th><th>Accepted</th><th>Rate</th></tr>' + st.routing.map(r => `<tr><td><span class="tag">${esc(r.kind)}</span></td><td>${esc(r.model)}</td><td>${r.ok} / ${r.n}</td><td><b>${r.n ? Math.round(100 * r.ok / r.n) + '%' : '–'}</b></td></tr>`).join('') + '</table>'
+    : '<div class="empty">The router has not tried anything yet. It learns from every step.</div>';
+  $('lessons').innerHTML = S.lessons.length ? S.lessons.map(l => `<div class="lesson"><div class="score ${l.score > 0 ? 'up' : l.score < 0 ? 'down' : ''}">${l.score > 0 ? '+' : ''}${l.score.toFixed(1)}</div><div><div>${esc(l.text)}</div><div class="meta">for the ${esc(l.role)} · ${l.applies_to.length ? esc(l.applies_to.join(', ')) : 'any task'} · used ${l.uses}×</div></div></div>`).join('')
+    : '<div class="empty">No lessons yet. After each task, the planner writes down what it would do differently.</div>';
+}
+
+// -- boot ----------------------------------------------------------------------------------
+show((location.hash || '#home').slice(1) || 'home');
+refresh(true).then(() => {
+  if (S && S.busy.run && !polling.run) { $('run-console').classList.add('show'); $('btn-run').disabled = true; $('btn-run').innerHTML = '<span class="spin"></span> Working…'; pollJob('run'); }
+  if (S && S.busy.eval && !polling.eval) { $('eval-console').classList.add('show'); $('btn-eval').disabled = true; pollJob('eval'); }
+});
+setInterval(() => refresh(waitingFor && Date.now() < waitUntil), 5000);
+</script>
+</body>
+</html>

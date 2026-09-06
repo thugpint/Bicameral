@@ -22,7 +22,7 @@ class Choice:
 
 
 class Router:
-    SUGGESTION_PRIOR = 1.0  # pseudo-successes granted to the architect's suggested role
+    SUGGESTION_PRIOR = 3.0  # pseudo-successes granted to the architect's suggested role (fresh install follows it ~80%)
 
     def __init__(self, store: Store, learning: bool = True, rng: random.Random | None = None):
         self.store = store

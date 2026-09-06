@@ -10,16 +10,16 @@ from .orchestrator import RunResult
 
 def _price(m: models.ModelSpec) -> str:
     if m.account_backed:
-        return " your account "
+        return "your account"
     if m.input_per_m is None:
-        return "  price n/a  "
-    return f"${m.input_per_m:>5.2f}/${m.output_per_m:<6.2f}"
+        return "price n/a"
+    return f"${m.input_per_m:.2f}/${m.output_per_m:.2f} per 1M"
 
 
 def list_models(available: list[str]) -> list[models.ModelSpec]:
     specs = [m for m in models.all_models() if m.provider in available]
     for i, m in enumerate(specs, 1):
-        print(f"  {i:>2}. {m.id:<28} {m.provider:<10} {_price(m)} per 1M  {m.note}")
+        print(f"  {i:>2}. {m.id:<28} {m.provider:<10} {_price(m):<22} {m.note}")
     return specs
 
 
