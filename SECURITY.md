@@ -6,7 +6,7 @@ Only the latest release and the `main` branch receive fixes.
 
 ## Reporting a vulnerability
 
-Do not open a public issue. Report privately through [GitHub security advisories](https://github.com/Devilz06/Bicameral/security/advisories/new).
+Do not open a public issue. Report privately through [GitHub security advisories](https://github.com/thugpint/Bicameral/security/advisories/new).
 
 Include the version or commit, the backend in use (Codex CLI, headless Claude Code, or an API model), steps to reproduce, and what an attacker gains. You will get an acknowledgement within a week. Fixes are released as soon as they are ready, and you will be credited in the advisory unless you ask not to be.
 

@@ -5,7 +5,7 @@ Issues and pull requests are welcome. Small, focused changes land fastest.
 ## Setup
 
 ```bash
-git clone https://github.com/Devilz06/Bicameral.git && cd Bicameral
+git clone https://github.com/thugpint/Bicameral.git && cd Bicameral
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"   # POSIX: .venv/bin/python
 .venv/Scripts/python -m pytest -q

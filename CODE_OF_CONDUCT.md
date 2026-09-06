@@ -22,4 +22,4 @@ This applies to all project spaces: issues, pull requests, discussions, and any 
 
 ## Enforcement
 
-Report problems to the maintainer, [@devilz06](https://github.com/devilz06), through a private message on GitHub or by [opening a security advisory](https://github.com/Devilz06/Bicameral/security/advisories/new) marked "conduct" if the report is sensitive. Reports are handled privately. Depending on severity the response is a warning, an edited or removed contribution, or a temporary or permanent ban from project spaces.
+Report problems to the maintainer, [@thugpint](https://github.com/thugpint), through a private message on GitHub or by [opening a security advisory](https://github.com/thugpint/Bicameral/security/advisories/new) marked "conduct" if the report is sensitive. Reports are handled privately. Depending on severity the response is a warning, an edited or removed contribution, or a temporary or permanent ban from project spaces.

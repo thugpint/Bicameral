@@ -28,5 +28,5 @@ First public release.
 - Browser GUI, Textual TUI, and `bicameral` / `bicameral-mcp` entry points.
 - 88 offline tests against scripted fake backends.
 
-[Unreleased]: https://github.com/Devilz06/Bicameral/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Devilz06/Bicameral/releases/tag/v0.1.0
+[Unreleased]: https://github.com/thugpint/Bicameral/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/thugpint/Bicameral/releases/tag/v0.1.0

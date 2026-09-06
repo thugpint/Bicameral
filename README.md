@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/Devilz06/Bicameral">
+  <a href="https://github.com/thugpint/Bicameral">
     <img src="assets/banner.svg" alt="Bicameral — two minds, one diff. Claude plans and reviews, a second model writes the code." width="100%">
   </a>
 </p>
@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Devilz06/Bicameral/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-a78bfa?style=flat-square"></a>
+  <a href="https://github.com/thugpint/Bicameral/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-a78bfa?style=flat-square"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22d3ee?style=flat-square&logo=python&logoColor=white">
   <img alt="Works with Claude Code" src="https://img.shields.io/badge/works%20with-Claude%20Code-f472b6?style=flat-square">
   <img alt="Works with Codex CLI" src="https://img.shields.io/badge/works%20with-Codex%20CLI-34d399?style=flat-square">
-  <a href="https://github.com/Devilz06/Bicameral/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Devilz06/Bicameral/tests.yml?branch=main&style=flat-square&label=tests"></a>
+  <a href="https://github.com/thugpint/Bicameral/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/thugpint/Bicameral/tests.yml?branch=main&style=flat-square&label=tests"></a>
 </p>
 
 <p align="center">
@@ -41,7 +41,7 @@ Claude Code becomes the **Architect**: it investigates the repo, writes a small 
 
 No API keys required. Your existing Claude and ChatGPT subscriptions are enough.
 
-**Status:** early alpha. It works end to end, but interfaces, the MCP tool names and the on-disk record format may change before 1.0. Pin a [release tag](https://github.com/Devilz06/Bicameral/releases) if you need stability.
+**Status:** early alpha. It works end to end, but interfaces, the MCP tool names and the on-disk record format may change before 1.0. Pin a [release tag](https://github.com/thugpint/Bicameral/releases) if you need stability.
 
 ## Features
 
@@ -102,7 +102,7 @@ Three steps, about two minutes. Works on Windows, macOS and Linux.
 Open a terminal (PowerShell on Windows, Terminal on macOS) and run:
 
 ```bash
-pip install git+https://github.com/Devilz06/Bicameral.git
+pip install git+https://github.com/thugpint/Bicameral.git
 ```
 
 ### Step 2: open the setup page
@@ -149,7 +149,7 @@ bicameral login codex    # optional: your ChatGPT account (needs: npm i -g @open
 Update:
 
 ```bash
-pip install --upgrade git+https://github.com/Devilz06/Bicameral.git
+pip install --upgrade git+https://github.com/thugpint/Bicameral.git
 bicameral install
 ```
 
@@ -245,7 +245,7 @@ There is also a terminal dashboard (`bicameral tui`) with the same information, 
 |---|---|
 | `bicameral` is not recognized / command not found | Use `python -m bicameral` (or `py -m bicameral` on Windows). Or add Python's `Scripts` folder to your PATH and open a new terminal. |
 | `pip` is not recognized | Use `python -m pip install ...` instead of `pip install ...`. |
-| `pip install git+...` fails with "git is not installed" | Install [Git](https://git-scm.com/downloads), or install from the zip instead: `pip install https://github.com/Devilz06/Bicameral/archive/refs/heads/main.zip` |
+| `pip install git+...` fails with "git is not installed" | Install [Git](https://git-scm.com/downloads), or install from the zip instead: `pip install https://github.com/thugpint/Bicameral/archive/refs/heads/main.zip` |
 | Claude Code does not know `/bicameral` | Restart Claude Code. Still missing? Run `bicameral status`. If it says the skill or MCP server is not installed, run `bicameral install` (or Settings → **Connect again** on the page). |
 | The skill says "bicameral_* tools are not available" | Same as above: `bicameral install`, then restart Claude Code. |
 | "Not signed in", or `claude` says "OAuth session expired" | Run `claude auth login` in a terminal, or click **Sign in to Claude** on the Setup tab. |
@@ -404,7 +404,7 @@ Two chambers, one decision. One mind plans and judges, the other executes, and t
 ## Developing
 
 ```bash
-git clone https://github.com/Devilz06/Bicameral.git && cd Bicameral
+git clone https://github.com/thugpint/Bicameral.git && cd Bicameral
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"   # POSIX: .venv/bin/python
 .venv/Scripts/python -m pytest -q
@@ -416,4 +416,4 @@ Style: 120-column lines, type hints, dataclasses, standard library first. Ruff i
 
 ## License
 
-[MIT](LICENSE). Made by [devilz06](https://github.com/Devilz06).
+[MIT](LICENSE). Made by [thugpint](https://github.com/thugpint).

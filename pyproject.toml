@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "devilz06" }]
+authors = [{ name = "thugpint" }]
 keywords = ["claude-code", "coding-agent", "developer-tools", "llm", "mcp", "orchestration"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -40,9 +40,9 @@ bicameral = "bicameral.cli:main"
 bicameral-mcp = "bicameral.mcp_server:main"
 
 [project.urls]
-Homepage = "https://github.com/Devilz06/Bicameral"
-Repository = "https://github.com/Devilz06/Bicameral"
-Issues = "https://github.com/Devilz06/Bicameral/issues"
+Homepage = "https://github.com/thugpint/Bicameral"
+Repository = "https://github.com/thugpint/Bicameral"
+Issues = "https://github.com/thugpint/Bicameral/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
