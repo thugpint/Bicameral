@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .base import AgentEditResult, Completion, ProviderError
+from .base import AgentEditResult, Completion, ProviderError, bare_model
 
 
 def find_executable() -> str | None:
@@ -85,10 +85,6 @@ def auth_status() -> dict[str, Any]:
     return {"installed": bool(exe), "loggedIn": mode is not None, "authMethod": mode or "none"}
 
 
-def bare_model(model: str) -> str:
-    return model.split(":", 1)[1] if ":" in model else model
-
-
 class CodexCliProvider:
     name = "codex-cli"
 
@@ -105,10 +101,10 @@ class CodexCliProvider:
                 [self.exe, *args], input=stdin, capture_output=True, text=True, encoding="utf-8", errors="replace",
                 cwd=str(cwd), timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
-            raise ProviderError(f"codex-cli: timed out after {timeout}s")
+        except subprocess.TimeoutExpired as e:
+            raise ProviderError(f"codex-cli: timed out after {timeout}s") from e
         except OSError as e:
-            raise ProviderError(f"codex-cli: could not start `codex`: {e}")
+            raise ProviderError(f"codex-cli: could not start `codex`: {e}") from e
         latency = int((time.perf_counter() - t0) * 1000)
         if proc.returncode != 0:
             tail = (proc.stderr or proc.stdout or "").strip()[-800:]

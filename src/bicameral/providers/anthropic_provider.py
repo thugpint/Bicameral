@@ -1,3 +1,5 @@
+"""Anthropic Messages API backend, keyed by an API key or an `ant auth login` OAuth profile."""
+
 from __future__ import annotations
 
 import time

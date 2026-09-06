@@ -1,16 +1,29 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "bicameral"
 version = "0.1.0"
-description = "Self-improving architect/editor orchestrator: a reasoning model plans and reviews, a coding model writes the diffs, and learned routing, reflective memory and retrieved examples make delegation measurably better over time."
+description = "Two-model coding orchestrator for Claude Code: one model plans and reviews, another writes the diffs, with learned routing, test verification and reflective memory."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "devilz06" }]
-keywords = ["llm", "ai-agents", "coding-agent", "ai-coding-assistant", "multi-agent", "orchestration", "anthropic", "claude", "claude-code", "openai", "codex", "gpt-5", "mcp", "model-context-protocol", "self-improving", "bandit", "developer-tools"]
+keywords = ["claude-code", "coding-agent", "developer-tools", "llm", "mcp", "orchestration"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Code Generators",
+  "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
   "anthropic>=1.0",
   "openai>=1.70",
@@ -27,8 +40,8 @@ bicameral = "bicameral.cli:main"
 bicameral-mcp = "bicameral.mcp_server:main"
 
 [project.urls]
-Repository = "https://github.com/Devilz06/Bicameral"
 Homepage = "https://github.com/Devilz06/Bicameral"
+Repository = "https://github.com/Devilz06/Bicameral"
 Issues = "https://github.com/Devilz06/Bicameral/issues"
 
 [tool.setuptools.packages.find]
@@ -39,3 +52,22 @@ bicameral = ["evals/tasks/**/*", "skill/*.md", "tui/*.tcss", "gui/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",  # pycodestyle
+  "F",  # pyflakes
+  "UP", # pyupgrade
+  "B",  # bugbear
+  "C4", # comprehensions
+]
+# Prompt strings and log lines run long on purpose; keep new code within line-length where it reads better.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/bicameral/evals/tasks/**" = ["ALL"] # eval fixtures contain deliberate bugs

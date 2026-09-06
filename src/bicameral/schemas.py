@@ -104,7 +104,7 @@ class Step:
     pin: bool = False  # the router must honour suggested_role (the user named who does this step)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], idx: int) -> "Step":
+    def from_dict(cls, d: dict[str, Any], idx: int) -> Step:
         kind = d.get("kind") if d.get("kind") in TASK_KINDS else "feature"
         role = d.get("suggested_role") if d.get("suggested_role") in ROLES else "editor"
         return cls(
@@ -128,7 +128,7 @@ class Plan:
     steps: list[Step] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Plan":
+    def from_dict(cls, d: dict[str, Any]) -> Plan:
         kind = d.get("task_kind") if d.get("task_kind") in TASK_KINDS else "feature"
         return cls(
             task_kind=kind,
@@ -161,7 +161,7 @@ class EditResult:
     concerns: str = ""
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "EditResult":
+    def from_dict(cls, d: dict[str, Any]) -> EditResult:
         status = d.get("status") if d.get("status") in ("edits", "need_files", "blocked") else "edits"
         return cls(
             status=status,
@@ -183,7 +183,7 @@ class Review:
     issues: list[str]
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Review":
+    def from_dict(cls, d: dict[str, Any]) -> Review:
         verdict = "accept" if d.get("verdict") == "accept" else "reject"
         return cls(verdict, str(d.get("feedback", "")), [str(i) for i in d.get("issues", [])])
 
@@ -205,7 +205,7 @@ class Critique:
     concerns: list[tuple[int, str, str]]  # (step id, issue, suggestion)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Critique":
+    def from_dict(cls, d: dict[str, Any]) -> Critique:
         concerns = []
         for c in d.get("concerns", []):
             try:

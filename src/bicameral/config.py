@@ -1,3 +1,5 @@
+"""User settings in ~/.bicameral/config.json: last-used models, effort levels, discovered model ids."""
+
 from __future__ import annotations
 
 import json

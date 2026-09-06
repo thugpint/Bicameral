@@ -1,3 +1,5 @@
+"""OpenAI Responses API backend, keyed by an API key. Chat-capable models only; media models are filtered out."""
+
 from __future__ import annotations
 
 import time

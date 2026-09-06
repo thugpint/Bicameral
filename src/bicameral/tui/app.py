@@ -246,20 +246,16 @@ class BicameralApp(App):
         self.query_one("#btn-claude-login", Button).disabled = find_claude() is None
 
         opts = [(f"{m.id}  ·  {m.display}", m.id) for m in models.all_models() if m.provider in available]
+        ids = {v for _, v in opts}
         cfg = config.load()
-        for sid in ("editor-select", "run-editor", "eval-editor"):
-            sel = self.query_one(f"#{sid}", Select)
-            sel.set_options(opts)
-            last = cfg.get("last_editor")
-            if last in {v for _, v in opts}:
-                sel.value = last
-        arch_opts = [(f"{m.id}  ·  {m.display}", m.id) for m in models.all_models() if m.provider in available]
-        for sid in ("run-arch", "eval-arch"):
-            sel = self.query_one(f"#{sid}", Select)
-            sel.set_options(arch_opts)
-            last = cfg.get("last_architect")
-            if last in {v for _, v in arch_opts}:
-                sel.value = last
+        for key, selects in (("last_editor", ("editor-select", "run-editor", "eval-editor")),
+                             ("last_architect", ("run-arch", "eval-arch"))):
+            last = cfg.get(key)
+            for sid in selects:
+                sel = self.query_one(f"#{sid}", Select)
+                sel.set_options(opts)
+                if last in ids:
+                    sel.value = last
 
         mt = self.query_one("#models-table", DataTable)
         mt.clear()

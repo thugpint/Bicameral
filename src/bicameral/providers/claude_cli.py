@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .base import AgentEditResult, Completion, ProviderError
+from .base import AgentEditResult, Completion, ProviderError, bare_model
 
 EDIT_TOOLS = ["Read", "Edit", "Write", "MultiEdit", "Glob", "Grep", "LS"]
 _NESTING_VARS = ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")
@@ -30,10 +30,6 @@ def clean_env() -> dict[str, str]:
     for k in _NESTING_VARS:
         env.pop(k, None)
     return env
-
-
-def bare_model(model: str) -> str:
-    return model.split(":", 1)[1] if ":" in model else model
 
 
 class ClaudeCliProvider:
@@ -54,10 +50,10 @@ class ClaudeCliProvider:
                 [self.exe, *args], input=stdin, capture_output=True, text=True, encoding="utf-8", errors="replace",
                 cwd=str(cwd) if cwd else None, env=clean_env(), timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
-            raise ProviderError(f"claude-cli: timed out after {timeout}s")
+        except subprocess.TimeoutExpired as e:
+            raise ProviderError(f"claude-cli: timed out after {timeout}s") from e
         except OSError as e:
-            raise ProviderError(f"claude-cli: could not start `claude`: {e}")
+            raise ProviderError(f"claude-cli: could not start `claude`: {e}") from e
         latency = int((time.perf_counter() - t0) * 1000)
         data = _parse_envelope(proc.stdout)
         if data is None:

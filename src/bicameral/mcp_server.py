@@ -12,13 +12,15 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from . import __version__, auth, config, models, paths
+from .edits import unified_diff
 from .engine import Attempt, Engine, RunConfig, dedupe_lessons, lessons_from_dicts
+from .evals.harness import format_report
+from .memory import Examples, Memory
 from .orchestrator import StepResult, run_log
 from .providers import LLM, ProviderError, build_providers
 from .router import Choice
@@ -133,8 +135,6 @@ class Bicameral:
 
     def recall(self, task: str) -> str:
         store = self.store
-        from .memory import Examples, Memory
-
         lessons = Memory(store).retrieve(task, k=6)
         examples = Examples(store).retrieve(task, "feature", k=3)
         out = ["## Lessons from past runs (apply the ones that fit)"]
@@ -297,8 +297,6 @@ class Bicameral:
             return f"step {step_id}: no files changed since bicameral_execute. Make the edit, then call bicameral_check again."
         s.self_snapshots.pop(step_id, None)
         snap: dict[str, str | None] = {p: before.get(p) for p in changed}
-        from .edits import unified_diff
-
         attempt = Attempt(True, snapshot=snap, touched=list(changed), diff=unified_diff(snap, changed))
         s.pending[step_id] = attempt
         return self._present(s, step_id, attempt, "edited by you", second_opinion=True)
@@ -384,7 +382,7 @@ class Bicameral:
         s = self.sessions.pop(run_id, None)
         if not s:
             return f"error: unknown run_id {run_id}"
-        for step_id, attempt in list(s.pending.items()):
+        for attempt in list(s.pending.values()):
             s.engine.rollback(attempt)  # never leave an unreviewed edit behind
         final_ok: bool | None = None
         if s.verify:
@@ -432,8 +430,6 @@ class Bicameral:
         return "\n".join(lines)
 
     def stats(self) -> str:
-        from .evals.harness import format_report
-
         store = self.store
         runs = [r for r in store.runs(limit=1000) if r["success"] is not None]
         lines = []

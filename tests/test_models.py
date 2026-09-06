@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 
 from bicameral import config, models
-from bicameral.providers import ProviderError
-from bicameral.providers import codex_cli
+from bicameral.providers import ProviderError, codex_cli
 
 
 def _write_cache(tmp_path, monkeypatch, entries):

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/Devilz06/Bicameral">
-    <img src="assets/banner.svg" alt="Bicameral — two minds, one diff. A self-improving two-model AI coding agent for Claude Code." width="100%">
+    <img src="assets/banner.svg" alt="Bicameral — two minds, one diff. Claude plans and reviews, a second model writes the code." width="100%">
   </a>
 </p>
 
@@ -9,7 +9,7 @@
 <p align="center">
   <b>Two minds. One diff.</b><br>
   Claude plans and reviews. A second model (Codex, another Claude, or an API model) writes the code.<br>
-  Every step is routed, test-verified, rolled back on failure, and <i>learned from</i>.
+  Every step is routed, test-verified, rolled back on failure, and learned from.
 </p>
 
 <p align="center">
@@ -17,28 +17,27 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22d3ee?style=flat-square&logo=python&logoColor=white">
   <img alt="Works with Claude Code" src="https://img.shields.io/badge/works%20with-Claude%20Code-f472b6?style=flat-square">
   <img alt="Works with Codex CLI" src="https://img.shields.io/badge/works%20with-Codex%20CLI-34d399?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-71%20passing%20offline-34d399?style=flat-square">
-  <a href="https://github.com/Devilz06/Bicameral/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Devilz06/Bicameral?style=flat-square&color=fbbf24"></a>
+  <a href="https://github.com/Devilz06/Bicameral/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Devilz06/Bicameral/tests.yml?branch=main&style=flat-square&label=tests"></a>
 </p>
 
 <p align="center">
-  <a href="#-how-to-install">How to install</a> ·
-  <a href="#-how-to-use-it">How to use it</a> ·
-  <a href="#-good-to-know">Good to know</a> ·
-  <a href="#-troubleshooting">Troubleshooting</a> ·
-  <a href="#-how-it-works">How it works</a> ·
-  <a href="#-faq">FAQ</a>
+  <a href="#install">Install</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#good-to-know">Good to know</a> ·
+  <a href="#troubleshooting">Troubleshooting</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#faq">FAQ</a>
 </p>
 
 ---
 
-Bicameral is an open-source **multi-agent AI coding tool** that turns [Claude Code](https://claude.com/claude-code) into a two-model system. Type one command:
+Bicameral turns [Claude Code](https://claude.com/claude-code) into a two-model system. Type one command:
 
 ```text
 /bicameral add a --dry-run flag to the export command
 ```
 
-Claude Code becomes the **Architect**: it investigates the repo, writes a small plan, and reviews every diff. A second model, the **Editor**, writes the code: **any model on your ChatGPT plan** (via the Codex CLI), a second Claude through headless Claude Code, or any model your Anthropic / OpenAI API key can see. A tiny local [MCP](https://modelcontextprotocol.io) server sits between them and does the part nobody else does: it **measures who is good at what, and gets better with every run.**
+Claude Code becomes the **Architect**: it investigates the repo, writes a small plan, and reviews every diff. A second model, the **Editor**, writes the code — any model on your ChatGPT plan (via the Codex CLI), a second Claude through headless Claude Code, or any model your Anthropic / OpenAI API key can see. A local [MCP](https://modelcontextprotocol.io) server sits between them: it routes each step, runs your tests, rolls back what fails review, and keeps a record of which model is good at what.
 
 No API keys required. Your existing Claude and ChatGPT subscriptions are enough.
 
@@ -46,11 +45,11 @@ No API keys required. Your existing Claude and ChatGPT subscriptions are enough.
   <img src="assets/gui-home.png" alt="Bicameral setup page: three checks (Claude Code signed in, a coder added, /bicameral connected) and the command ready to copy." width="92%">
 </p>
 
-## 📦 How to install
+## Install
 
 Three steps, about two minutes. Works on Windows, macOS and Linux.
 
-### Before you start, you need
+### Prerequisites
 
 | | Why | Get it |
 |---|---|---|
@@ -74,9 +73,9 @@ bicameral
 
 A page opens in your browser with a three-step checklist. Work down it:
 
-1. **Sign in to Claude**. Opens Claude's own login window. Skip it if it already says "Signed in".
+1. **Sign in to Claude.** Opens Claude's own login window. Skip it if it already says "Signed in".
 2. **Add a coder** *(optional)*. **Install Codex CLI**, then **Sign in to ChatGPT**: every model on your ChatGPT plan becomes available as the coder. Or paste an Anthropic / OpenAI API key under Settings. Skip it and Claude does both jobs.
-3. **Connect to Claude Code**. Adds the `/bicameral` command. Takes a second.
+3. **Connect to Claude Code.** Adds the `/bicameral` command.
 
 When steps 1 and 3 are green a **Ready** box appears with a command you can copy.
 
@@ -123,12 +122,12 @@ bicameral uninstall
 pip uninstall bicameral
 ```
 
-Your history and lessons live in `~/.bicameral/`. Delete that folder if you want a clean slate.
+Your history and lessons live in `~/.bicameral/`. Delete that folder for a clean slate.
 </details>
 
-## 🚀 How to use it
+## Usage
 
-### Inside Claude Code (the normal way)
+### Inside Claude Code
 
 Type `/bicameral` followed by a task, in a project that has tests if possible:
 
@@ -139,16 +138,16 @@ Type `/bicameral` followed by a task, in a project that has tests if possible:
 /bicameral rename User to Account everywhere
 ```
 
-Here is what happens, in plain terms:
+What happens:
 
 1. **Claude asks which coder to use.** The list is whatever your sign-ins and keys can actually run: every model on your ChatGPT plan, a second Claude, API models. Pick one, type any other id, or say "Do it all myself". Your last choice is recommended.
-2. **Claude reads your repo and writes a short plan** of 1 to 4 small steps, each with the files to touch and a pass/fail check. **The coder reads the plan first** and points out anything under-specified or missing; Claude revises.
+2. **Claude reads your repo and writes a plan** of 1 to 4 small steps, each with the files to touch and a pass/fail check. The coder reads the plan first and points out anything under-specified or missing; Claude revises.
 3. **Each step is written, tested and reviewed by the other mind.** The coder edits the files, your tests run, and Claude reviews the diff against the step's check. When Claude writes a step itself, the coder reviews that diff before Claude makes the call. A rejected or failing edit is rolled back and retried with feedback, up to three times.
-4. **You get a short report:** what changed, who wrote each step, how many tries it took, what the coder pushed back on, and whether the tests pass. Nothing is committed; the report lists the changed files and you commit when you are happy.
+4. **You get a report:** what changed, who wrote each step, how many tries it took, what the coder pushed back on, and whether the tests pass. Nothing is committed; the report lists the changed files and you commit when you are happy.
 
 Say who should do what and it sticks: "let Codex write the tests" pins those steps to the coder, so the router's exploration never swaps authors.
 
-Good tasks are small and concrete. "Fix the failing test in `test_parser.py`" beats "improve the parser".
+Tasks work best when they are small and concrete. "Fix the failing test in `test_parser.py`" beats "improve the parser".
 
 ### Without Claude Code
 
@@ -176,7 +175,7 @@ bicameral run "fix the failing test" --path ./myproject --architect claude:opus 
 
 There is also a terminal dashboard (`bicameral tui`) with the same information, for servers and SSH sessions.
 
-## 💡 Good to know
+## Good to know
 
 - **It never commits.** Every edit is snapshotted first, reviewed, and rolled back on rejection. Anything left unreviewed at the end of a run is rolled back too. You always get a clean working tree to inspect.
 - **It uses your subscriptions.** Claude Code runs on your Claude account, Codex on your ChatGPT account. Those show as $0 in the spend tile. API keys are optional and only for pay-per-token use.
@@ -186,7 +185,7 @@ There is also a terminal dashboard (`bicameral tui`) with the same information, 
 - **The router explores on purpose.** It usually follows Claude's suggestion of who should do a step, but sends roughly one step in five the other way on a fresh install so it can learn which model is better at what. Once there is a track record, it follows the evidence.
 - **One task at a time** on the setup page. Reloading the page mid-run re-attaches to the running task.
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | What you see | What to do |
 |---|---|
@@ -201,7 +200,7 @@ There is also a terminal dashboard (`bicameral tui`) with the same information, 
 | A task "failed" but your files look untouched | That is the rollback working. Open the task in **History** to see which step was rejected and why. |
 | The page says it lost the connection | The terminal that ran `bicameral` was closed. Run `bicameral` again. |
 
-## 🧠 How it works
+## How it works
 
 ```mermaid
 flowchart LR
@@ -242,30 +241,30 @@ One run of `/bicameral`, step by step:
 4. **Route, edit, verify, cross-review.** For every step the server decides who executes it. The Editor's diff comes back with the test output and any concerns the Editor has about the step; Claude reviews it against the acceptance criterion. When the step stays with Claude, the Editor reviews Claude's diff first and Claude gets that second opinion before deciding. Rejections roll back the files and retry with feedback, up to three times. Acceptance is refused while required tests fail.
 5. **Finish and reflect.** Final verification, outcome logging, and 0–3 transferable lessons from each mind (duplicates merged). The report lists the uncommitted files; a run cut off before this point is marked interrupted in History rather than left hanging.
 
-## 🥊 Why it is different
+## Design notes
 
 Plenty of tools split "planner" and "coder". Bicameral is about the loop around that split.
 
 | | Bicameral | Typical planner/coder split |
 |---|---|---|
-| Runs inside Claude Code as a skill | ✅ `/bicameral` | usually a separate CLI |
-| Uses your subscriptions, no API key | ✅ Claude + ChatGPT sign-in | API keys |
-| Reviewer gate with test verification | ✅ every step, auto-rollback | prompt-only review, if any |
-| The coder talks back | ✅ critiques the plan, reviews the planner's own diffs, flags concerns | executes silently |
-| Decides who executes each step | ✅ learned bandit over (step kind, model) | fixed roles |
-| Learns from outcomes | ✅ scored lessons, retrieved examples | no memory, or unscored notes |
-| Baseline mode to measure the learning | ✅ `--baseline` and an eval harness | ❌ |
+| Runs inside Claude Code as a skill | `/bicameral` | usually a separate CLI |
+| Uses your subscriptions, no API key | Claude + ChatGPT sign-in | API keys |
+| Reviewer gate with test verification | every step, auto-rollback | prompt-only review, if any |
+| The coder talks back | critiques the plan, reviews the planner's own diffs, flags concerns | executes silently |
+| Decides who executes each step | learned bandit over (step kind, model) | fixed roles |
+| Learns from outcomes | scored lessons, retrieved examples | no memory, or unscored notes |
+| Baseline mode to measure the learning | `--baseline` and an eval harness | — |
 
 The pieces, in one paragraph each:
 
 - **Learned routing.** A Thompson-sampling bandit over (step kind, model) decides whether a step goes to the Editor or stays with the Architect. It starts from the Architect's suggestion and overrides it once the track record says so. It explores on purpose; that is what makes routing learnable.
-- **Reviewer gate.** Every diff is reviewed against the step's acceptance criterion *and* your test command, by the model that did not write it. Nothing is ever left applied without a review; rejected or failing edits are rolled back to a snapshot and retried with the feedback.
+- **Reviewer gate.** Every diff is reviewed against the step's acceptance criterion *and* your test command, by the model that did not write it. Nothing is left applied without a review; rejected or failing edits are rolled back to a snapshot and retried with the feedback.
 - **Two voices.** The Editor critiques the plan before the first edit, can attach concerns to any diff it produces, and gives a second opinion on the Architect's own diffs. The Architect still decides, but it decides with the other mind's objection in front of it.
 - **Reflective memory.** After each run both models write 0–3 transferable lessons. They are retrieved by relevance for later tasks and scored by whether the runs they were used in succeeded. Losers get pruned.
 - **Retrieved examples.** Diffs that passed both review and verification are shown to the Editor as few-shot examples on similar steps.
-- **Hard evaluation.** Fixture repos with failing tests, pass/fail per task, and a learning-off baseline, so "self-improving" is a number, not a vibe.
+- **Evaluation.** Fixture repos with failing tests, pass/fail per task, and a learning-off baseline, so "self-improving" is a number rather than a claim.
 
-## 📈 Prove it learns
+## Measuring the learning
 
 ```bash
 bicameral eval --baseline --runs 3 --architect claude:opus --editor codex:gpt-5-codex
@@ -287,7 +286,7 @@ Honest status: the bundled suite has three tasks and every number so far came fr
 }
 ```
 
-## 🔌 Backends and model ids
+## Backends and model ids
 
 | Prefix | Backend | Sign in | Examples |
 |---|---|---|---|
@@ -299,7 +298,7 @@ The model menus and `bicameral models` show exactly what is usable right now: th
 
 Inside Claude Code the Architect is always the host session (recorded as `claude-code`); the prefixes matter for the Editor and for standalone runs. Account-backed backends are billed to your subscription and show as $0 in the spend tile.
 
-## 🗂 Layout
+## Layout
 
 ```text
 src/bicameral/
@@ -319,7 +318,7 @@ src/bicameral/
 tests/              71 offline tests with scripted fake backends
 ```
 
-## ❓ FAQ
+## FAQ
 
 **Do I need an OpenAI or Anthropic API key?**
 No. Claude Code signs in with your Claude account and the Codex CLI signs in with your ChatGPT account. API keys are an optional extra in Settings.
@@ -342,18 +341,19 @@ Inside Claude Code the planner is the session you are in, so switch it with `/mo
 **Why "Bicameral"?**
 Two chambers, one decision. One mind plans and judges, the other executes, and the bridge between them keeps score.
 
-## 🛠 Developing
+## Developing
 
 ```bash
 git clone https://github.com/Devilz06/Bicameral.git && cd Bicameral
-python -m venv .venv && .venv/Scripts/python -m pip install -e . pytest
+python -m venv .venv
+.venv/Scripts/python -m pip install -e ".[dev]"   # POSIX: .venv/bin/python
 .venv/Scripts/python -m pytest -q
 ```
 
-The tests run fully offline against scripted fake backends (`tests/fake.py`). The layout table above says where each part lives. Issues and pull requests are welcome.
+The 71 tests run fully offline against scripted fake backends (`tests/fake.py`); no account or API key is needed. CI runs them on Linux and Windows against Python 3.11 and 3.12.
 
-## 📜 License
+Style: 120-column lines, type hints, dataclasses, standard library first. Ruff is configured in `pyproject.toml`; run `ruff check src tests` if you have it. Keep changes surgical and match the surrounding code. The layout table above says where each part lives. Issues and pull requests are welcome.
+
+## License
 
 [MIT](LICENSE). Made by [devilz06](https://github.com/Devilz06).
-
-<p align="center"><sub>Keywords: AI coding agent · Claude Code skill · MCP server · Codex CLI · GPT-5 Codex · multi-agent · architect editor · self-improving · learned routing · Thompson sampling · reflective memory · coding assistant · developer tools</sub></p>

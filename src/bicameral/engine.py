@@ -7,8 +7,9 @@ record outcomes, and reflect. It holds no loop of its own.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from . import prompts
 from .edits import EditError, apply_edits, unified_diff
@@ -283,4 +284,6 @@ def lessons_from_dicts(items: list[dict[str, Any]]) -> list[Lesson]:
     return out
 
 
-__all__ = ["Engine", "Attempt", "RunConfig", "OrchestratorError", "ProviderError", "lessons_from_dicts"]
+__all__ = [
+    "Attempt", "Engine", "OrchestratorError", "ProviderError", "RunConfig", "dedupe_lessons", "lessons_from_dicts",
+]

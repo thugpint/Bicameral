@@ -1,3 +1,5 @@
+"""Where Bicameral keeps its state on disk. Every path derives from `home()`."""
+
 from __future__ import annotations
 
 import os

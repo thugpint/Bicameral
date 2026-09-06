@@ -16,7 +16,7 @@ from .schemas import Plan, Step
 from .store import Store
 from .workspace import Workspace
 
-__all__ = ["Orchestrator", "RunConfig", "RunResult", "StepResult", "OrchestratorError"]
+__all__ = ["Orchestrator", "OrchestratorError", "RunConfig", "RunResult", "StepResult", "run_log"]
 
 
 @dataclass
@@ -64,7 +64,8 @@ class Orchestrator:
         self.log = self.engine.log
 
     @property
-    def _cost(self) -> float:
+    def cost(self) -> float:
+        """Total spend accounted so far, in USD; account-backed backends report 0."""
         return self.engine.cost
 
     def execute_step(self, idx: int, total: int, step: Step, plan_summary: str, lessons, verify: str | None, enforce_verify: bool, run_id: int) -> StepResult:

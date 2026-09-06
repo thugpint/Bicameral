@@ -12,9 +12,9 @@ import json
 import shutil
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from ..orchestrator import Orchestrator, OrchestratorError, RunConfig
 from ..providers import LLM, ProviderError
@@ -96,9 +96,9 @@ def run_task(task: EvalTask, llm: LLM, store: Store, cfg: RunConfig, suite: str,
         duration = time.time() - t0
         store.add_eval(
             suite=suite, task_id=task.id, learning=int(cfg.learning), success=int(success),
-            cost_usd=orch._cost, duration_s=duration, attempts=attempts, run_id=run_id,
+            cost_usd=orch.cost, duration_s=duration, attempts=attempts, run_id=run_id,
         )
-        return EvalResult(task.id, success, orch._cost, duration, attempts, run_id, note)
+        return EvalResult(task.id, success, orch.cost, duration, attempts, run_id, note)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

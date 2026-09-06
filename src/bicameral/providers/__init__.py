@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from .. import credentials, models
 from .base import AgentEditResult, Completion, InPlaceEditor, Provider, ProviderError
@@ -84,10 +85,10 @@ def parse_json(text: str) -> dict[str, Any]:
     cleaned = _FENCE.sub("", text.strip()).strip()
     try:
         data = json.loads(cleaned)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as first:
         start, end = cleaned.find("{"), cleaned.rfind("}")
         if start == -1 or end <= start:
-            raise ProviderError("model returned no JSON object")
+            raise ProviderError("model returned no JSON object") from first
         try:
             data = json.loads(cleaned[start : end + 1])
         except json.JSONDecodeError as e:

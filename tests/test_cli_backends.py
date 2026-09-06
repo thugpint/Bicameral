@@ -107,7 +107,7 @@ def test_codex_complete_writes_schema_and_reads_last_message():
     assert c.text == '{"lessons": []}'
 
 
-def test_codex_edit_in_place_full_auto_in_workspace(tmp_path):
+def test_codex_edit_in_place_uses_the_workspace_write_sandbox(tmp_path):
     rec = Recorder(on_call=_codex_writer("edited"))
     res = CodexCliProvider(executable="x", runner=rec).edit_in_place("codex:gpt-5", tmp_path, "PROMPT")
     args, call = rec.calls[0]["args"], rec.calls[0]

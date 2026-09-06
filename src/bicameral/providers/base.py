@@ -1,8 +1,12 @@
+"""The provider contract: what every backend must offer the engine, and the shapes it returns."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
+
+__all__ = ["AgentEditResult", "Completion", "InPlaceEditor", "Provider", "ProviderError", "bare_model"]
 
 
 class ProviderError(RuntimeError):
@@ -52,3 +56,8 @@ class InPlaceEditor(Protocol):
     """Backends that can edit files in a workspace themselves (Claude Code, Codex CLI)."""
 
     def edit_in_place(self, model: str, root: Path, prompt: str, effort: str | None = None) -> AgentEditResult: ...
+
+
+def bare_model(model: str) -> str:
+    """Strip the backend prefix: 'claude:sonnet' -> 'sonnet'. CLI backends take the bare name."""
+    return model.split(":", 1)[1] if ":" in model else model
