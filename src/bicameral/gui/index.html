@@ -114,8 +114,8 @@ main{max-width:960px;margin:0 auto;padding:28px 20px 64px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;color:var(--muted);font-weight:500;padding:6px 10px;border-bottom:1px solid var(--line)}
 td{padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
-tr.row{cursor:pointer}
-tr.row:hover td{background:var(--bg2)}
+tr.run{cursor:pointer}
+tr.run:hover td{background:var(--bg2)}
 .tag{display:inline-block;padding:0 7px;border-radius:10px;font-size:12px;border:1px solid var(--line);color:var(--muted);line-height:18px}
 .tag.ok{color:var(--ok);border-color:var(--ok)}.tag.bad{color:var(--bad);border-color:var(--bad)}
 .detail{padding:8px 4px}
@@ -522,7 +522,7 @@ function renderHistory() {
   if (!S.runs.length) { h.innerHTML = '<div class="empty">Nothing yet. Run <code>/bicameral</code> in Claude Code, or use the Run tab.</div>'; return; }
   h.innerHTML = '<table><tr><th>When</th><th>Result</th><th>Task</th><th>Coder</th><th>Steps</th><th>Cost</th></tr>' + S.runs.map(r => {
     const tag = r.success === 1 ? '<span class="tag ok">ok</span>' : r.success === 0 ? '<span class="tag bad">failed</span>' : r.summary === 'interrupted' ? '<span class="tag">interrupted</span>' : '<span class="tag">running</span>';
-    return `<tr class="row" onclick="toggleRun(${r.id}, this)"><td class="help">${esc(r.when)}</td><td>${tag}</td><td>${esc(r.task.slice(0, 90))}${r.kind ? ` <span class="tag">${esc(r.kind)}</span>` : ''}</td><td class="mono">${esc(r.editor)}</td><td>${r.steps_ok}/${r.steps_total}</td><td class="help">$${r.cost.toFixed(3)}</td></tr><tr id="d-${r.id}" hidden><td colspan="6"></td></tr>`;
+    return `<tr class="run" onclick="toggleRun(${r.id}, this)"><td class="help">${esc(r.when)}</td><td>${tag}</td><td>${esc(r.task.slice(0, 90))}${r.kind ? ` <span class="tag">${esc(r.kind)}</span>` : ''}</td><td class="mono">${esc(r.editor)}</td><td>${r.steps_ok}/${r.steps_total}</td><td class="help">$${r.cost.toFixed(3)}</td></tr><tr id="d-${r.id}" hidden><td colspan="6"></td></tr>`;
   }).join('') + '</table>';
 }
 async function toggleRun(id, row) {

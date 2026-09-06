@@ -7,6 +7,10 @@ interfaces.
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI History tab: rows rendered as a two-column grid instead of a table because the row class collided with the form layout class.
+
 ## [0.1.0] - 2026-09-06
 
 First public release.
