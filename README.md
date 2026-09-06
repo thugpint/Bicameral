@@ -17,7 +17,6 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22d3ee?style=flat-square&logo=python&logoColor=white">
   <img alt="Works with Claude Code" src="https://img.shields.io/badge/works%20with-Claude%20Code-f472b6?style=flat-square">
   <img alt="Works with Codex CLI" src="https://img.shields.io/badge/works%20with-Codex%20CLI-34d399?style=flat-square">
-  <a href="https://github.com/Devilz06/Bicameral/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Devilz06/Bicameral/tests.yml?branch=main&style=flat-square&label=tests"></a>
 </p>
 
 <p align="center">
@@ -408,7 +407,7 @@ python -m venv .venv
 .venv/Scripts/python -m pytest -q
 ```
 
-The 88 tests run fully offline against scripted fake backends (`tests/fake.py`) and a throwaway git repository; no account or API key is needed. CI runs them on Linux and Windows against Python 3.11 and 3.12.
+The 88 tests run fully offline against scripted fake backends (`tests/fake.py`) and a throwaway git repository; no account or API key is needed.
 
 Style: 120-column lines, type hints, dataclasses, standard library first. Ruff is configured in `pyproject.toml`; run `ruff check src tests` if you have it. Keep changes surgical and match the surrounding code. The layout table above says where each part lives. Issues and pull requests are welcome.
 
