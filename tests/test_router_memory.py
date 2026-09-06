@@ -60,7 +60,7 @@ def test_memory_retrieve_and_feedback(store):
     m.feedback([ids[1]], success=False)
     m.feedback([ids[1]], success=False)
     assert m.prune() == 1
-    assert [l.text for l in store.lessons()] == ["include the failing test in editor context for bugfix steps"]
+    assert [lesson.text for lesson in store.lessons()] == ["include the failing test in editor context for bugfix steps"]
 
 
 def test_examples_prefer_same_kind(store):

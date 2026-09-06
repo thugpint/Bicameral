@@ -136,7 +136,7 @@ class Orchestrator:
         lessons = eng.recall(task)
         if lessons:
             self.log(f"recalled {len(lessons)} lesson(s) from past runs")
-        lesson_ids = [l.id for l in lessons if l.id is not None]
+        lesson_ids = [lesson.id for lesson in lessons if lesson.id is not None]
 
         run_id = self.store.create_run(
             task=task, workspace=str(self.ws.root), architect_model=cfg.architect_model,
@@ -210,7 +210,7 @@ class Orchestrator:
                 if eng.two_models:
                     new_lessons = dedupe_lessons(new_lessons + eng.reflect(log_text, model=cfg.editor_model))
                 eng.remember(new_lessons, run_id)
-                lessons_learned = [l.text for l in new_lessons]
+                lessons_learned = [lesson.text for lesson in new_lessons]
                 for text in lessons_learned:
                     self.log(f"  lesson: {text}")
             except ProviderError as e:

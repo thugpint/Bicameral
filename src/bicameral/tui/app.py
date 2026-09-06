@@ -299,8 +299,8 @@ class BicameralApp(App):
 
         lt = self.query_one("#lessons-table", DataTable)
         lt.clear()
-        for l in store.lessons():
-            lt.add_row(str(l.id), f"{l.score:+.1f}", str(l.uses), l.role, ", ".join(l.applies_to) or "any", l.text)
+        for lesson in store.lessons():
+            lt.add_row(str(lesson.id), f"{lesson.score:+.1f}", str(lesson.uses), lesson.role, ", ".join(lesson.applies_to) or "any", lesson.text)
 
     # -- setup tab ---------------------------------------------------------------
 

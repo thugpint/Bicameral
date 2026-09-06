@@ -62,7 +62,7 @@ def test_full_delegated_flow(median_repo):
     run = store.runs()[0]
     assert run["success"] == 1 and run["architect_model"] == ARCHITECT_ID and run["editor_model"] == EDITOR
     assert store.routing_stats("bugfix", EDITOR) == (1, 0)
-    assert [l.text for l in store.lessons()] == ["name the failing test in bugfix steps"]
+    assert [lesson.text for lesson in store.lessons()] == ["name the failing test in bugfix steps"]
     assert len(store.examples()) == 1
     assert app.sessions == {}
     assert "learning on: 1/1" in app.stats()
@@ -241,4 +241,4 @@ def test_finish_stores_editor_lessons_too(median_repo):
     out = app.finish(run_id, True, [LessonInput(lesson="architect lesson", applies_to=["bugfix"], role="architect")])
     assert f"lessons from {EDITOR}: ask for the test file up front" in out
     assert fp.calls_for("reflect")[0][1] == EDITOR
-    assert sorted(l.text for l in store.lessons()) == ["architect lesson", "ask for the test file up front"]
+    assert sorted(lesson.text for lesson in store.lessons()) == ["architect lesson", "ask for the test file up front"]

@@ -246,7 +246,7 @@ class Critique:
         for step, issue, suggestion in self.concerns:
             where = f"step {step}: " if step else ""
             lines.append(f"- {where}{issue}" + (f" -> {suggestion}" if suggestion else ""))
-        return "\n".join(l for l in lines if l)
+        return "\n".join(line for line in lines if line)
 
 
 @dataclass

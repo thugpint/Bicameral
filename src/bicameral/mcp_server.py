@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -142,13 +141,13 @@ class Bicameral:
         lessons = Memory(store).retrieve(task, k=6)
         examples = Examples(store).retrieve(task, "feature", k=3)
         out = ["## Lessons from past runs (apply the ones that fit)"]
-        out += [f"- ({l.role}; {', '.join(l.applies_to) or 'any'}; score {l.score:+.1f}) {l.text}" for l in lessons] or ["- none yet"]
+        out += [f"- ({lesson.role}; {', '.join(lesson.applies_to) or 'any'}; score {lesson.score:+.1f}) {lesson.text}" for lesson in lessons] or ["- none yet"]
         if workspace:
             try:
                 repo_lessons = RepoLessons(Workspace(workspace).root).read()
             except NotADirectoryError:
                 repo_lessons = []
-            known = {l.text.strip() for l in lessons}
+            known = {lesson.text.strip() for lesson in lessons}
             extra = [t for t in repo_lessons if t not in known]
             if extra:
                 out.append(f"\n## Lessons committed in this repository ({RepoLessons.REL_PATH})")
@@ -264,7 +263,7 @@ class Bicameral:
                                        editor_model=editor_model, learning=int(learning), task_kind=task_kind)
         verify = engine.resolve_verify(verify_command)
         baseline = ws.run(verify).ok if verify else None
-        session = Session(run_id, task, ws, engine, cfg, plan, verify, baseline, [l.id for l in lessons if l.id is not None],
+        session = Session(run_id, task, ws, engine, cfg, plan, verify, baseline, [lesson.id for lesson in lessons if lesson.id is not None],
                           two_models=not self_only)
         for s in plan.steps:
             if self_only:
@@ -476,7 +475,7 @@ class Bicameral:
         if not success and not failure and final_ok is False:
             failure = f"final verification `{s.verify}` failed"
 
-        new_lessons = lessons_from_dicts([l.model_dump() for l in (lessons or [])])
+        new_lessons = lessons_from_dicts([lesson.model_dump() for lesson in (lessons or [])])
         log_text = run_log(s.task, s.plan, results, success, failure)
         editor_lessons = []
         if s.two_models and s.cfg.learning:
@@ -484,8 +483,8 @@ class Bicameral:
                 editor_lessons = s.engine.reflect(log_text, model=s.cfg.editor_model)
             except ProviderError:
                 editor_lessons = []
-        known = {" ".join(l.text.lower().split()) for l in new_lessons}
-        editor_lessons = [l for l in dedupe_lessons(editor_lessons) if " ".join(l.text.lower().split()) not in known]
+        known = {" ".join(lesson.text.lower().split()) for lesson in new_lessons}
+        editor_lessons = [lesson for lesson in dedupe_lessons(editor_lessons) if " ".join(lesson.text.lower().split()) not in known]
         s.engine.credit_lessons(s.lesson_ids, success)
         s.engine.remember(new_lessons + editor_lessons, s.run_id)
         repo_written = RepoLessons(s.ws.root).write(self.store.lessons_for_workspace(str(s.ws.root))) if s.cfg.learning else 0
@@ -502,9 +501,9 @@ class Bicameral:
             lines.append(f"final verification: {'pass' if final_ok else 'FAIL'}")
         lines.append(f"editor cost: ${s.engine.cost:.4f} ({s.engine.input_tokens}+{s.engine.output_tokens} tok); duration {duration:.0f}s")
         if new_lessons:
-            lines.append("lessons stored: " + "; ".join(l.text for l in new_lessons))
+            lines.append("lessons stored: " + "; ".join(lesson.text for lesson in new_lessons))
         if editor_lessons:
-            lines.append(f"lessons from {s.cfg.editor_model}: " + "; ".join(l.text for l in editor_lessons))
+            lines.append(f"lessons from {s.cfg.editor_model}: " + "; ".join(lesson.text for lesson in editor_lessons))
         if repo_written:
             lines.append(f"{repo_written} lesson(s) for this repo mirrored into {RepoLessons.REL_PATH} (commit it to share them)")
         disputes = self.store.disputes_for(s.run_id)
@@ -541,7 +540,7 @@ class Bicameral:
         top = store.lessons()[:8]
         if top:
             lines.append("\ntop lessons:")
-            lines += [f"  [{l.score:+.1f}] ({l.role}) {l.text}" for l in top]
+            lines += [f"  [{lesson.score:+.1f}] ({lesson.role}) {lesson.text}" for lesson in top]
         return "\n".join(lines) or "no data yet"
 
 

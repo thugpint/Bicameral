@@ -148,8 +148,8 @@ class GuiState:
                 for r in store.runs(limit=200)
             ],
             "lessons": [
-                {"id": l.id, "score": l.score, "uses": l.uses, "role": l.role, "applies_to": l.applies_to, "text": l.text}
-                for l in store.lessons()
+                {"id": lesson.id, "score": lesson.score, "uses": lesson.uses, "role": lesson.role, "applies_to": lesson.applies_to, "text": lesson.text}
+                for lesson in store.lessons()
             ],
             "busy": {"run": self.run_job.running, "eval": self.eval_job.running},
             "eval_report": harness.format_report(store),

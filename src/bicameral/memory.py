@@ -22,10 +22,10 @@ class Memory:
         self.store = store
 
     def retrieve(self, query: str, k: int = 5) -> list[Lesson]:
-        lessons = [l for l in self.store.lessons() if l.score > self.PRUNE_BELOW]
+        lessons = [lesson for lesson in self.store.lessons() if lesson.score > self.PRUNE_BELOW]
         if not lessons:
             return []
-        docs = [f"{l.text} {' '.join(l.applies_to)} {l.role}" for l in lessons]
+        docs = [f"{lesson.text} {' '.join(lesson.applies_to)} {lesson.role}" for lesson in lessons]
         bm25 = BM25(docs)
         ranked = sorted(
             range(len(lessons)),
@@ -34,14 +34,14 @@ class Memory:
         return [lessons[i] for i in ranked[:k]]
 
     def add(self, lessons: list[Lesson], run_id: int | None) -> list[int]:
-        return [self.store.add_lesson(l, run_id) for l in lessons if l.text.strip()]
+        return [self.store.add_lesson(lesson, run_id) for lesson in lessons if lesson.text.strip()]
 
     def feedback(self, lesson_ids: list[int], success: bool) -> None:
         """Lessons that were in context for a successful run gain credit; failures cost a little."""
         self.store.bump_lessons(lesson_ids, 1.0 if success else -0.5)
 
     def prune(self) -> int:
-        doomed = [l.id for l in self.store.lessons() if l.id is not None and l.score <= self.PRUNE_BELOW]
+        doomed = [lesson.id for lesson in self.store.lessons() if lesson.id is not None and lesson.score <= self.PRUNE_BELOW]
         self.store.delete_lessons(doomed)
         return len(doomed)
 
@@ -121,13 +121,13 @@ class RepoLessons:
         return out
 
     def write(self, lessons: list[Lesson]) -> int:
-        keep = [l for l in lessons if l.text.strip() and l.score > Memory.PRUNE_BELOW][-self.CAP:]
+        keep = [lesson for lesson in lessons if lesson.text.strip() and lesson.score > Memory.PRUNE_BELOW][-self.CAP:]
         existing = set(self.read())
-        for l in keep:
-            existing.discard(l.text.strip())
+        for lesson in keep:
+            existing.discard(lesson.text.strip())
         if not keep and not self.path.exists():
             return 0
-        lines = [f"- ({', '.join(l.applies_to) or 'any'}; {l.role}; {l.score:+.1f}) {l.text.strip()}" for l in keep]
+        lines = [f"- ({', '.join(lesson.applies_to) or 'any'}; {lesson.role}; {lesson.score:+.1f}) {lesson.text.strip()}" for lesson in keep]
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(self.HEADER + "\n".join(lines) + ("\n" if lines else ""), "utf-8", newline="\n")
         return len(keep)

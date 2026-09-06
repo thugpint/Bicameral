@@ -17,8 +17,7 @@ from bicameral.memory import RepoLessons
 from bicameral.providers import LLM
 from bicameral.router import Router
 from bicameral.store import Store
-from bicameral.workspace import Workspace
-from fake import EDITOR, FakeProvider, edits, lessons, reject
+from fake import EDITOR, FakeProvider, edits, reject
 from test_orchestrator import BUGGY, FIXED, VERIFY
 
 STEP = StepInput(id=1, title="Fix median for even-length input", description="average the two middle values",

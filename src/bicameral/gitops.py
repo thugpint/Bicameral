@@ -110,7 +110,7 @@ def diff(root: Path, base: str = "HEAD") -> str:
         except (UnicodeDecodeError, OSError):
             continue
         lines = text.splitlines()
-        body = "\n".join("+" + l for l in lines)
+        body = "\n".join("+" + line for line in lines)
         parts.append(f"diff --git a/{rel} b/{rel}\nnew file mode 100644\n--- /dev/null\n+++ b/{rel}\n@@ -0,0 +1,{len(lines)} @@\n{body}")
     return "\n".join(p for p in parts if p).strip()
 

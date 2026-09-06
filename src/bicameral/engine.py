@@ -343,11 +343,11 @@ def dedupe_lessons(lessons: list[Lesson]) -> list[Lesson]:
     """Two minds reflecting on one run often say the same thing; keep the first wording."""
     seen: set[str] = set()
     out: list[Lesson] = []
-    for l in lessons:
-        key = " ".join(l.text.lower().split())
+    for lesson in lessons:
+        key = " ".join(lesson.text.lower().split())
         if key and key not in seen:
             seen.add(key)
-            out.append(l)
+            out.append(lesson)
     return out
 
 

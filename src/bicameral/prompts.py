@@ -68,7 +68,7 @@ Bad lessons restate the task, are only true of this repo, or are generic advice.
 def _lessons_block(lessons: list[Lesson]) -> str:
     if not lessons:
         return ""
-    lines = [f"- ({l.role}, for: {', '.join(l.applies_to) or 'any'}) {l.text}" for l in lessons]
+    lines = [f"- ({lesson.role}, for: {', '.join(lesson.applies_to) or 'any'}) {lesson.text}" for lesson in lessons]
     return "## Lessons from past runs\n" + "\n".join(lines) + "\n\n"
 
 
@@ -115,7 +115,7 @@ def build_edit_prompt(
     parts = [
         f"## Overall task\n{plan_summary}\n\n",
         f"## Your step: {step.title}\n{step.description}\n\nAcceptance criterion: {step.acceptance}\n\n",
-        _lessons_block([l for l in lessons if l.role in ("editor", "any")]),
+        _lessons_block([lesson for lesson in lessons if lesson.role in ("editor", "any")]),
     ]
     if examples:
         ex = "\n\n".join(
@@ -145,7 +145,7 @@ def build_agent_edit_prompt(step: Step, plan_summary: str, examples: list[Exampl
         f"## Overall task\n{plan_summary}\n\n",
         f"## Your step: {step.title}\n{step.description}\n\nAcceptance criterion: {step.acceptance}\n",
         (f"Files the Architect expects you to touch: {', '.join(step.files)}\n\n" if step.files else "\n"),
-        _lessons_block([l for l in lessons if l.role in ("editor", "any")]),
+        _lessons_block([lesson for lesson in lessons if lesson.role in ("editor", "any")]),
     ]
     if examples:
         ex = "\n\n".join(f"### Past step: {e.description[:200]}\n```diff\n{e.diff}\n```" for e in examples)

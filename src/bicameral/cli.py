@@ -201,8 +201,8 @@ def cmd_lessons(prune: bool = False) -> int:
         lessons = store.lessons()
         if not lessons:
             print("no lessons yet; they are written after each run with learning on")
-        for l in lessons:
-            print(f"  #{l.id} [{l.score:+.1f}, used {l.uses}x, conf {l.confidence:.2f}] ({l.role}; {', '.join(l.applies_to) or 'any'}) {l.text}")
+        for lesson in lessons:
+            print(f"  #{lesson.id} [{lesson.score:+.1f}, used {lesson.uses}x, conf {lesson.confidence:.2f}] ({lesson.role}; {', '.join(lesson.applies_to) or 'any'}) {lesson.text}")
     finally:
         store.close()
     return 0
