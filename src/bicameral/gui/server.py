@@ -214,17 +214,29 @@ class GuiState:
         if not key:
             return {"ok": False, "message": "Paste a key first."}
         try:
-            n = len(build_provider(provider, key).list_models())
+            ids = build_provider(provider, key).list_models()
         except ProviderError as e:
             return {"ok": False, "message": f"Key rejected: {e}"}
         credentials.set_key(provider, key)
+        models.remember(provider, ids)
         self.invalidate()
-        return {"ok": True, "message": f"{provider} key saved ({n} models visible)."}
+        return {"ok": True, "message": f"{provider} key saved. {len(ids)} models available."}
 
     def do_remove_key(self, provider: str) -> dict[str, Any]:
         credentials.clear_key(provider)
+        models.remember(provider, [])
         self.invalidate()
         return {"ok": True, "message": f"Removed the stored {provider} key."}
+
+    def do_refresh_models(self) -> dict[str, Any]:
+        try:
+            counts = models.refresh(build_providers())
+        except ProviderError as e:
+            return {"ok": False, "message": f"Could not list models: {e}"}
+        self.invalidate()
+        if not counts:
+            return {"ok": True, "message": "No API key saved. Account sign-ins list their models automatically."}
+        return {"ok": True, "message": "Model list updated: " + ", ".join(f"{k} {n}" for k, n in counts.items()) + "."}
 
     def do_set_default(self, editor: str | None, architect: str | None) -> dict[str, Any]:
         updates: dict[str, Any] = {}
@@ -409,6 +421,8 @@ class Handler(BaseHTTPRequestHandler):
                 out = st.do_save_key(str(body.get("provider", "")), str(body.get("key", "")))
             elif action == "key/remove":
                 out = st.do_remove_key(str(body.get("provider", "")))
+            elif action == "models/refresh":
+                out = st.do_refresh_models()
             elif action == "defaults":
                 out = st.do_set_default(body.get("editor"), body.get("architect"))
             elif action == "prune":

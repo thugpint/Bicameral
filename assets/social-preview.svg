@@ -33,7 +33,7 @@
   <g font-family="Inter, Segoe UI, Helvetica Neue, Arial, sans-serif">
     <text x="470" y="270" font-size="104" font-weight="800" fill="#ece9fb" letter-spacing="-4">Bicameral</text>
     <text x="474" y="335" font-size="40" font-weight="700" fill="url(#gB)">Two minds. One diff.</text>
-    <text x="474" y="392" font-size="24" fill="#b3aed4">Claude plans &amp; reviews. Codex writes the code.</text>
+    <text x="474" y="392" font-size="24" fill="#b3aed4">Claude plans &amp; reviews. A second model writes the code.</text>
     <text x="474" y="428" font-size="24" fill="#b3aed4">Every step routed, test-verified, and learned from.</text>
     <g transform="translate(474 470)">
       <rect width="330" height="46" rx="12" fill="#0b0a14" stroke="#2b2750"/>

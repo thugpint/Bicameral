@@ -1,22 +1,30 @@
-"""Model catalog with pricing, capability flags and backend resolution.
+"""Model catalog: what each signed-in backend can run right now.
 
 Model ids carry an optional backend prefix:
 - `claude:<model>`  headless Claude Code on the user's Anthropic account
 - `codex:<model>`   Codex CLI on the user's ChatGPT account
 - anything else     the Anthropic or OpenAI API, inferred from the id
 
-The static catalog is a starting point; `bicameral models --refresh` pulls the
-live list from API providers and stores extra ids in config.
+Where a backend can tell us what the account can see, that list wins over the
+static catalog:
+- codex-cli reads the Codex CLI's own model cache (~/.codex/models_cache.json)
+- anthropic / openai ask the API (`bicameral models --refresh`, or whenever a
+  key is saved) and the ids are kept in config
+Claude Code has no list command, so it gets the aliases the CLI accepts. Any
+id the user types is accepted as-is; the backend says if it does not exist.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Mapping
 
 from . import config
 
 BACKEND_PREFIXES = {"claude": "claude-cli", "codex": "codex-cli"}
 ACCOUNT_PROVIDERS = ("claude-cli", "codex-cli")
+API_PROVIDERS = ("anthropic", "openai")
+PROVIDER_ORDER = ("claude-cli", "codex-cli", "anthropic", "openai")
 
 
 @dataclass(frozen=True)
@@ -35,6 +43,7 @@ class ModelSpec:
 
 
 CATALOG: tuple[ModelSpec, ...] = (
+    ModelSpec("claude-cli", "claude:fable", "Claude Fable via Claude Code", 0.0, 0.0, True, "your Anthropic account"),
     ModelSpec("claude-cli", "claude:opus", "Claude Opus via Claude Code", 0.0, 0.0, True, "your Anthropic account"),
     ModelSpec("claude-cli", "claude:sonnet", "Claude Sonnet via Claude Code", 0.0, 0.0, True, "your Anthropic account"),
     ModelSpec("claude-cli", "claude:haiku", "Claude Haiku via Claude Code", 0.0, 0.0, True, "your Anthropic account"),
@@ -51,7 +60,7 @@ CATALOG: tuple[ModelSpec, ...] = (
     ModelSpec("openai", "o4-mini", "o4-mini", 1.1, 4.4, True, "cheap reasoning"),
 )
 
-_OPENAI_REASONING_PREFIXES = ("o1", "o3", "o4", "gpt-5")
+_OPENAI_REASONING_PREFIXES = ("o1", "o3", "o4", "gpt-5", "gpt-6")
 
 
 def split_backend(model_id: str) -> tuple[str | None, str]:
@@ -79,21 +88,69 @@ def _infer_effort(provider: str, model_id: str) -> bool:
     return bare.startswith(_OPENAI_REASONING_PREFIXES)
 
 
-def all_models() -> list[ModelSpec]:
-    """Static catalog plus any ids discovered through `models --refresh`."""
-    out = list(CATALOG)
-    known = {m.id for m in out}
+def discovered() -> dict[str, list[tuple[str, str]]]:
+    """(id, display) per provider, for the backends that can list what the account sees."""
+    out: dict[str, list[tuple[str, str]]] = {}
+    from .providers.codex_cli import cached_models  # lazy: providers imports this module
+
+    codex = [(f"codex:{slug}", f"{name} via Codex CLI") for slug, name in cached_models()]
+    if codex:
+        out["codex-cli"] = codex
     extra = config.load().get("extra_models") or {}
     for provider, ids in extra.items():
-        for mid in ids:
-            if mid not in known:
-                out.append(ModelSpec(provider, mid, mid, None, None, _infer_effort(provider, mid), "discovered"))
-                known.add(mid)
+        if ids:
+            out[provider] = [(mid, mid) for mid in ids]
     return out
+
+
+def all_models() -> list[ModelSpec]:
+    """Per provider: the discovered list if there is one, else the static catalog."""
+    by_id = {m.id: m for m in CATALOG}
+    found = discovered()
+    out: list[ModelSpec] = []
+    for provider in PROVIDER_ORDER:
+        if provider in found:
+            for mid, display in found[provider]:
+                spec = by_id.get(mid)
+                if spec is not None:
+                    out.append(spec)
+                else:
+                    price = (0.0, 0.0) if provider in ACCOUNT_PROVIDERS else (None, None)
+                    note = "your account" if provider in ACCOUNT_PROVIDERS else "your key"
+                    out.append(ModelSpec(provider, mid, display, price[0], price[1], _infer_effort(provider, mid), note))
+        else:
+            out.extend(m for m in CATALOG if m.provider == provider)
+    return out
+
+
+def remember(provider: str, ids: list[str]) -> None:
+    """Keep an API provider's live model list so it shows without asking again."""
+    extra = dict(config.load().get("extra_models") or {})
+    extra[provider] = sorted(ids)
+    config.update(extra_models=extra)
+
+
+def refresh(providers: Mapping[str, object]) -> dict[str, int]:
+    """Ask every API backend what the key can see and store it. Returns id counts per provider.
+
+    Raises ProviderError from the first backend that fails.
+    """
+    counts: dict[str, int] = {}
+    for name in API_PROVIDERS:
+        provider = providers.get(name)
+        if provider is None:
+            continue
+        ids = list(provider.list_models())  # type: ignore[attr-defined]
+        remember(name, ids)
+        counts[name] = len(ids)
+    return counts
 
 
 def find(model_id: str) -> ModelSpec:
     for m in all_models():
+        if m.id == model_id:
+            return m
+    for m in CATALOG:
         if m.id == model_id:
             return m
     provider = infer_provider(model_id)

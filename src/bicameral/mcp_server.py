@@ -117,6 +117,7 @@ class Bicameral:
                 lines.append(f"- {m.id:<22} {m.display} ({price})")
         else:
             lines.append("- none: sign in to a backend first (see hints above), or route every step to yourself")
+        lines.append("Any other id the account supports works too: prefix it with codex: or claude: for the account backends.")
         lines.append(f"\nLast editor model: {cfg.get('last_editor') or '(none yet)'}")
         runs = self.store.runs(limit=1000)
         done = [r for r in runs if r["success"] is not None]

@@ -76,7 +76,7 @@ def test_model_lookup_infers_unknown_ids_and_extra_models():
     assert unknown.provider == "openai" and not unknown.supports_effort and unknown.input_per_m is None
     assert models.find("claude-haiku-4-5").supports_effort is False
     config.update(extra_models={"openai": ["gpt-9-preview"]})
-    assert any(m.id == "gpt-9-preview" and m.note == "discovered" for m in models.all_models())
+    assert any(m.id == "gpt-9-preview" and m.note == "your key" for m in models.all_models())
     assert models.estimate_cost(models.find("claude-sonnet-5"), 1_000_000, 100_000) == 3.0
 
 

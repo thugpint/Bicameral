@@ -29,12 +29,7 @@ def _resolve(answer: str, specs: list[models.ModelSpec], default: str | None) ->
         return default
     if answer.isdigit() and 1 <= int(answer) <= len(specs):
         return specs[int(answer) - 1].id
-    for m in specs:
-        if m.id == answer:
-            return m.id
-    if answer.startswith(("claude", "codex", "gpt", "o1", "o3", "o4")):
-        return answer  # allow ids we have not catalogued
-    return None
+    return answer  # any other id is passed through; the backend says if it does not exist
 
 
 def pick_models(available: list[str]) -> tuple[str, str]:

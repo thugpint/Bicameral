@@ -23,8 +23,40 @@ def find_executable() -> str | None:
     return shutil.which("codex")
 
 
+def codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+
+
 def auth_file() -> Path:
-    return Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")) / "auth.json"
+    return codex_home() / "auth.json"
+
+
+def models_cache_file() -> Path:
+    return codex_home() / "models_cache.json"
+
+
+DEFAULT_MODELS = ("gpt-5-codex", "gpt-5")
+
+
+def cached_models() -> list[tuple[str, str]]:
+    """(slug, display name) for every model the Codex CLI lists for this account.
+
+    The CLI refreshes ~/.codex/models_cache.json from the account on every start,
+    so it is the closest thing to "what my ChatGPT plan can run".
+    """
+    p = models_cache_file()
+    if not p.exists():
+        return []
+    try:
+        data = json.loads(p.read_text("utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    out: list[tuple[str, str]] = []
+    for m in data.get("models") or []:
+        slug = m.get("slug") if isinstance(m, dict) else None
+        if slug and m.get("visibility", "list") == "list":
+            out.append((slug, m.get("display_name") or slug))
+    return out
 
 
 def auth_status() -> dict[str, Any]:
@@ -34,10 +66,11 @@ def auth_status() -> dict[str, Any]:
     if p.exists():
         try:
             data = json.loads(p.read_text("utf-8"))
-            if data.get("OPENAI_API_KEY"):
-                mode = "api-key"
-            elif isinstance(data.get("tokens"), dict) and data["tokens"].get("access_token"):
+            tokens = data.get("tokens")
+            if isinstance(tokens, dict) and tokens.get("access_token"):
                 mode = data.get("auth_mode") or "chatgpt"
+            elif data.get("OPENAI_API_KEY"):
+                mode = "api-key"
         except (json.JSONDecodeError, OSError):
             mode = None
     return {"installed": bool(exe), "loggedIn": mode is not None, "authMethod": mode or "none"}
@@ -110,4 +143,5 @@ class CodexCliProvider:
         return AgentEditResult(summary=text, latency_ms=latency, cost_usd=0.0)
 
     def list_models(self) -> list[str]:
-        return ["codex:gpt-5-codex", "codex:gpt-5"]
+        slugs = [slug for slug, _ in cached_models()] or list(DEFAULT_MODELS)
+        return [f"codex:{s}" for s in slugs]

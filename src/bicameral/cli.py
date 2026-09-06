@@ -60,11 +60,12 @@ def cmd_login(provider: str, verify: bool = True) -> int:
         return 1
     if verify:
         try:
-            n = len(build_provider(provider, key).list_models())
+            ids = build_provider(provider, key).list_models()
         except ProviderError as e:
             print(f"key rejected: {e}")
             return 1
-        print(f"key accepted ({n} models visible)")
+        models.remember(provider, ids)
+        print(f"key accepted ({len(ids)} models visible)")
     credentials.set_key(provider, key)
     print(f"logged in to {provider}")
     return 0
@@ -113,20 +114,11 @@ def cmd_status() -> int:
 def cmd_models(refresh: bool = False) -> int:
     available = auth.available_ids()
     if refresh:
-        extra = {}
-        for name, provider in build_providers().items():
-            if name not in ("anthropic", "openai"):
-                continue
-            try:
-                ids = provider.list_models()
-            except ProviderError as e:
-                print(f"  {name}: {e}")
-                continue
-            extra[name] = ids
-            print(f"  {name}: {len(ids)} models")
-        merged = dict(config.load().get("extra_models") or {})
-        merged.update(extra)
-        config.update(extra_models=merged)
+        try:
+            for name, n in models.refresh(build_providers()).items():
+                print(f"  {name}: {n} models")
+        except ProviderError as e:
+            print(f"  {e}")
     if not available:
         print("no backends available; showing the full catalog")
         available = sorted({m.provider for m in models.all_models()})
@@ -271,8 +263,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status", help="backends, sign-in state and Claude Code integration")
 
-    s = sub.add_parser("models", help="list models")
-    s.add_argument("--refresh", action="store_true", help="pull the live model list from API providers")
+    s = sub.add_parser("models", help="list the models your sign-ins and keys can use")
+    s.add_argument("--refresh", action="store_true", help="ask the Anthropic / OpenAI API what your key can see")
 
     s = sub.add_parser("run", help="run a task standalone (outside Claude Code)")
     s.add_argument("task")

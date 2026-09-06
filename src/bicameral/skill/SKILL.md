@@ -13,7 +13,7 @@ If the `bicameral_*` tools are not available, tell the user to run `bicameral in
 
 1. Call `bicameral_status`.
 2. If it lists no usable editor model, tell the user how to sign in (the status output includes the exact command per backend, e.g. `codex login` for a ChatGPT account, `claude auth login` for a second Claude, or `bicameral login openai` for an API key). Offer to continue with `editor_model="self"` (you do every step) and only proceed if they agree.
-3. Otherwise ask the user which Editor model to use with AskUserQuestion. Options are the models from the status output; put the last-used model first and mark it "(Recommended)". Include "Do it all myself" as an option (`self`). The Architect is you, on whatever model this session runs; mention `/model` if they want to change that.
+3. Otherwise ask the user which Editor model to use with AskUserQuestion. Options are the models from the status output (that list is what their sign-ins and keys can actually run); put the last-used model first and mark it "(Recommended)". Include "Do it all myself" as an option (`self`). If the user types a different id under "Other", pass it through exactly as written, keeping the `codex:` / `claude:` prefix for account backends. The Architect is you, on whatever model this session runs; mention `/model` if they want to change that.
 
 ## 1. Recall and investigate
 

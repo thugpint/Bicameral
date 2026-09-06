@@ -118,7 +118,9 @@ class ClaudeCliProvider:
         )
 
     def list_models(self) -> list[str]:
-        return ["claude:opus", "claude:sonnet", "claude:haiku"]
+        # Claude Code has no list command; these are the aliases `--model` accepts.
+        # Any full model name (claude-sonnet-5, ...) works too, prefixed with `claude:`.
+        return ["claude:fable", "claude:opus", "claude:sonnet", "claude:haiku"]
 
 
 def auth_status(executable: str | None = None, runner=subprocess.run) -> dict[str, Any]:

@@ -36,6 +36,6 @@
   <g font-family="Inter, Segoe UI, Helvetica Neue, Arial, sans-serif">
     <text x="380" y="150" font-size="96" font-weight="800" fill="#ece9fb" letter-spacing="-3">Bicameral</text>
     <text x="384" y="205" font-size="34" font-weight="600" fill="url(#gB)">Two minds. One diff.</text>
-    <text x="384" y="250" font-size="22" fill="#8f89b3">Claude plans &amp; reviews · Codex writes the code · every step verified, and learned from</text>
+    <text x="384" y="250" font-size="19" fill="#8f89b3" textLength="770" lengthAdjust="spacingAndGlyphs">Claude plans and reviews · a second model writes the code · every step verified</text>
   </g>
 </svg>
