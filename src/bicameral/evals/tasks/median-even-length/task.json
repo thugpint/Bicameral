@@ -1,0 +1,7 @@
+{
+  "id": "median-even-length",
+  "kind": "bugfix",
+  "task": "median() in stats.py returns the wrong value for even-length input (it should average the two middle values). Fix it so the test suite passes.",
+  "verify_command": "{python} -m pytest -q",
+  "expect_initial_failure": true
+}

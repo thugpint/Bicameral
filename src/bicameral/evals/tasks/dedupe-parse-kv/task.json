@@ -1,0 +1,7 @@
+{
+  "id": "dedupe-parse-kv",
+  "kind": "refactor",
+  "task": "config_loader.py and cli_args.py each contain their own copy of parse_kv. Move a single implementation into util.py and make both modules import it from there, so that neither module defines parse_kv itself. The existing tests must keep passing.",
+  "verify_command": "{python} -m pytest -q && {python} -c \"import config_loader, cli_args, util; assert config_loader.parse_kv is util.parse_kv and cli_args.parse_kv is util.parse_kv, 'parse_kv is still duplicated'\"",
+  "expect_initial_failure": true
+}

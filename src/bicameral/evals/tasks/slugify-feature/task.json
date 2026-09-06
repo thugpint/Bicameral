@@ -1,0 +1,7 @@
+{
+  "id": "slugify-feature",
+  "kind": "feature",
+  "task": "Implement slugify(text) in text_utils.py: lowercase the text, replace every run of non-alphanumeric characters with a single hyphen, and strip leading/trailing hyphens. tests/test_text_utils.py already covers the expected behaviour.",
+  "verify_command": "{python} -m pytest -q",
+  "expect_initial_failure": true
+}
